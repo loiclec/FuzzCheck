@@ -1,0 +1,87 @@
+client:
+  name: swift-build
+tools: {}
+targets:
+  "main": ["/Users/loic/Projects/swiftpm-fuzzed/.build/x86_64-apple-macosx10.10/release/Fuzzer.swiftmodule","/Users/loic/Projects/swiftpm-fuzzed/.build/x86_64-apple-macosx10.10/release/ModuleToTest.swiftmodule","/Users/loic/Projects/swiftpm-fuzzed/.build/x86_64-apple-macosx10.10/release/ToTest","/Users/loic/Projects/swiftpm-fuzzed/.build/x86_64-apple-macosx10.10/release/ToTest.swiftmodule","<Fuzzer.module>","<ModuleToTest.module>","<ToTest.exe>","<ToTest.module>"]
+  "test": ["/Users/loic/Projects/swiftpm-fuzzed/.build/x86_64-apple-macosx10.10/release/Fuzzer.swiftmodule","/Users/loic/Projects/swiftpm-fuzzed/.build/x86_64-apple-macosx10.10/release/ModuleToTest.swiftmodule","/Users/loic/Projects/swiftpm-fuzzed/.build/x86_64-apple-macosx10.10/release/ToTest","/Users/loic/Projects/swiftpm-fuzzed/.build/x86_64-apple-macosx10.10/release/ToTest.swiftmodule","<Fuzzer.module>","<ModuleToTest.module>","<ToTest.exe>","<ToTest.module>"]
+  "Fuzzer.module": ["/Users/loic/Projects/swiftpm-fuzzed/.build/x86_64-apple-macosx10.10/release/Fuzzer.swiftmodule","<Fuzzer.module>"]
+  "ModuleToTest.module": ["/Users/loic/Projects/swiftpm-fuzzed/.build/x86_64-apple-macosx10.10/release/ModuleToTest.swiftmodule","<ModuleToTest.module>"]
+  "ToTest.exe": ["/Users/loic/Projects/swiftpm-fuzzed/.build/x86_64-apple-macosx10.10/release/ToTest","<ToTest.exe>"]
+  "ToTest.module": ["/Users/loic/Projects/swiftpm-fuzzed/.build/x86_64-apple-macosx10.10/release/ToTest.swiftmodule","<ToTest.module>"]
+default: "main"
+commands: 
+  "<C.Fuzzer.module>":
+    tool: phony
+    inputs: ["/Users/loic/Projects/swiftpm-fuzzed/.build/x86_64-apple-macosx10.10/release/Fuzzer.swiftmodule"]
+    outputs: ["<Fuzzer.module>"]
+
+  "<C.ModuleToTest.module>":
+    tool: phony
+    inputs: ["/Users/loic/Projects/swiftpm-fuzzed/.build/x86_64-apple-macosx10.10/release/ModuleToTest.swiftmodule"]
+    outputs: ["<ModuleToTest.module>"]
+
+  "<C.ToTest.exe>":
+    tool: phony
+    inputs: ["/Users/loic/Projects/swiftpm-fuzzed/.build/x86_64-apple-macosx10.10/release/ToTest"]
+    outputs: ["<ToTest.exe>"]
+
+  "<C.ToTest.module>":
+    tool: phony
+    inputs: ["/Users/loic/Projects/swiftpm-fuzzed/.build/x86_64-apple-macosx10.10/release/ToTest.swiftmodule"]
+    outputs: ["<ToTest.module>"]
+
+  "C.Fuzzer.module":
+    tool: swift-compiler
+    executable: "/Library/Developer/Toolchains/swift-DEVELOPMENT-SNAPSHOT-2018-05-18-a.xctoolchain/usr/bin/swiftc"
+    module-name: "Fuzzer"
+    module-output-path: "/Users/loic/Projects/swiftpm-fuzzed/.build/x86_64-apple-macosx10.10/release/Fuzzer.swiftmodule"
+    inputs: ["/Users/loic/Projects/swiftpm-fuzzed/Sources/Fuzzer/FuzzTarget.swift","/Users/loic/Projects/swiftpm-fuzzed/Sources/Fuzzer/Random.swift","/Users/loic/Projects/swiftpm-fuzzed/Sources/Fuzzer/fuzzer.swift"]
+    outputs: ["/Users/loic/Projects/swiftpm-fuzzed/.build/x86_64-apple-macosx10.10/release/Fuzzer.build/FuzzTarget.swift.o","/Users/loic/Projects/swiftpm-fuzzed/.build/x86_64-apple-macosx10.10/release/Fuzzer.build/Random.swift.o","/Users/loic/Projects/swiftpm-fuzzed/.build/x86_64-apple-macosx10.10/release/Fuzzer.build/fuzzer.swift.o","/Users/loic/Projects/swiftpm-fuzzed/.build/x86_64-apple-macosx10.10/release/Fuzzer.swiftmodule"]
+    import-paths: ["/Users/loic/Projects/swiftpm-fuzzed/.build/x86_64-apple-macosx10.10/release"]
+    temps-path: "/Users/loic/Projects/swiftpm-fuzzed/.build/x86_64-apple-macosx10.10/release/Fuzzer.build"
+    objects: ["/Users/loic/Projects/swiftpm-fuzzed/.build/x86_64-apple-macosx10.10/release/Fuzzer.build/FuzzTarget.swift.o","/Users/loic/Projects/swiftpm-fuzzed/.build/x86_64-apple-macosx10.10/release/Fuzzer.build/Random.swift.o","/Users/loic/Projects/swiftpm-fuzzed/.build/x86_64-apple-macosx10.10/release/Fuzzer.build/fuzzer.swift.o"]
+    other-args: ["-swift-version","4","-target","x86_64-apple-macosx10.10","-sdk","/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX10.13.sdk","-F","/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/Library/Frameworks","-O","-j4","-DSWIFT_PACKAGE","-module-cache-path","/Users/loic/Projects/swiftpm-fuzzed/.build/x86_64-apple-macosx10.10/release/ModuleCache","-Xfrontend","-color-diagnostics"]
+    sources: ["/Users/loic/Projects/swiftpm-fuzzed/Sources/Fuzzer/FuzzTarget.swift","/Users/loic/Projects/swiftpm-fuzzed/Sources/Fuzzer/Random.swift","/Users/loic/Projects/swiftpm-fuzzed/Sources/Fuzzer/fuzzer.swift"]
+    is-library: true
+    enable-whole-module-optimization: true
+    num-threads: "4"
+
+  "C.ModuleToTest.module":
+    tool: swift-compiler
+    executable: "/Library/Developer/Toolchains/swift-DEVELOPMENT-SNAPSHOT-2018-05-18-a.xctoolchain/usr/bin/swiftc"
+    module-name: "ModuleToTest"
+    module-output-path: "/Users/loic/Projects/swiftpm-fuzzed/.build/x86_64-apple-macosx10.10/release/ModuleToTest.swiftmodule"
+    inputs: ["/Users/loic/Projects/swiftpm-fuzzed/Sources/ModuleToTest/module.swift"]
+    outputs: ["/Users/loic/Projects/swiftpm-fuzzed/.build/x86_64-apple-macosx10.10/release/ModuleToTest.build/module.swift.o","/Users/loic/Projects/swiftpm-fuzzed/.build/x86_64-apple-macosx10.10/release/ModuleToTest.swiftmodule"]
+    import-paths: ["/Users/loic/Projects/swiftpm-fuzzed/.build/x86_64-apple-macosx10.10/release"]
+    temps-path: "/Users/loic/Projects/swiftpm-fuzzed/.build/x86_64-apple-macosx10.10/release/ModuleToTest.build"
+    objects: ["/Users/loic/Projects/swiftpm-fuzzed/.build/x86_64-apple-macosx10.10/release/ModuleToTest.build/module.swift.o"]
+    other-args: ["-swift-version","4","-target","x86_64-apple-macosx10.10","-sdk","/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX10.13.sdk","-F","/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/Library/Frameworks","-O","-j4","-DSWIFT_PACKAGE","-module-cache-path","/Users/loic/Projects/swiftpm-fuzzed/.build/x86_64-apple-macosx10.10/release/ModuleCache","-sanitize=address","-Xfrontend","-color-diagnostics","-sanitize-coverage=edge"]
+    sources: ["/Users/loic/Projects/swiftpm-fuzzed/Sources/ModuleToTest/module.swift"]
+    is-library: true
+    enable-whole-module-optimization: true
+    num-threads: "4"
+
+  "C.ToTest.exe":
+    tool: shell
+    description: "Linking ./.build/x86_64-apple-macosx10.10/release/ToTest"
+    inputs: ["/Users/loic/Projects/swiftpm-fuzzed/.build/x86_64-apple-macosx10.10/release/Fuzzer.build/FuzzTarget.swift.o","/Users/loic/Projects/swiftpm-fuzzed/.build/x86_64-apple-macosx10.10/release/Fuzzer.build/Random.swift.o","/Users/loic/Projects/swiftpm-fuzzed/.build/x86_64-apple-macosx10.10/release/Fuzzer.build/fuzzer.swift.o","/Users/loic/Projects/swiftpm-fuzzed/.build/x86_64-apple-macosx10.10/release/ModuleToTest.build/module.swift.o","/Users/loic/Projects/swiftpm-fuzzed/.build/x86_64-apple-macosx10.10/release/ToTest.build/main.swift.o"]
+    outputs: ["/Users/loic/Projects/swiftpm-fuzzed/.build/x86_64-apple-macosx10.10/release/ToTest"]
+    args: ["/Library/Developer/Toolchains/swift-DEVELOPMENT-SNAPSHOT-2018-05-18-a.xctoolchain/usr/bin/swiftc","-target","x86_64-apple-macosx10.10","-sdk","/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX10.13.sdk","-F","/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/Library/Frameworks","-sanitize=address","-L","/Users/loic/Projects/swiftpm-fuzzed/.build/x86_64-apple-macosx10.10/release","-o","/Users/loic/Projects/swiftpm-fuzzed/.build/x86_64-apple-macosx10.10/release/ToTest","-module-name","ToTest","-emit-executable","/Users/loic/Projects/swiftpm-fuzzed/.build/x86_64-apple-macosx10.10/release/Fuzzer.build/FuzzTarget.swift.o","/Users/loic/Projects/swiftpm-fuzzed/.build/x86_64-apple-macosx10.10/release/Fuzzer.build/Random.swift.o","/Users/loic/Projects/swiftpm-fuzzed/.build/x86_64-apple-macosx10.10/release/Fuzzer.build/fuzzer.swift.o","/Users/loic/Projects/swiftpm-fuzzed/.build/x86_64-apple-macosx10.10/release/ModuleToTest.build/module.swift.o","/Users/loic/Projects/swiftpm-fuzzed/.build/x86_64-apple-macosx10.10/release/ToTest.build/main.swift.o","-sanitize-coverage=edge"]
+
+  "C.ToTest.module":
+    tool: swift-compiler
+    executable: "/Library/Developer/Toolchains/swift-DEVELOPMENT-SNAPSHOT-2018-05-18-a.xctoolchain/usr/bin/swiftc"
+    module-name: "ToTest"
+    module-output-path: "/Users/loic/Projects/swiftpm-fuzzed/.build/x86_64-apple-macosx10.10/release/ToTest.swiftmodule"
+    inputs: ["/Users/loic/Projects/swiftpm-fuzzed/.build/x86_64-apple-macosx10.10/release/Fuzzer.swiftmodule","/Users/loic/Projects/swiftpm-fuzzed/.build/x86_64-apple-macosx10.10/release/ModuleToTest.swiftmodule","/Users/loic/Projects/swiftpm-fuzzed/Sources/ToTest/main.swift"]
+    outputs: ["/Users/loic/Projects/swiftpm-fuzzed/.build/x86_64-apple-macosx10.10/release/ToTest.build/main.swift.o","/Users/loic/Projects/swiftpm-fuzzed/.build/x86_64-apple-macosx10.10/release/ToTest.swiftmodule"]
+    import-paths: ["/Users/loic/Projects/swiftpm-fuzzed/.build/x86_64-apple-macosx10.10/release"]
+    temps-path: "/Users/loic/Projects/swiftpm-fuzzed/.build/x86_64-apple-macosx10.10/release/ToTest.build"
+    objects: ["/Users/loic/Projects/swiftpm-fuzzed/.build/x86_64-apple-macosx10.10/release/ToTest.build/main.swift.o"]
+    other-args: ["-swift-version","4","-target","x86_64-apple-macosx10.10","-sdk","/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX10.13.sdk","-F","/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/Library/Frameworks","-O","-j4","-DSWIFT_PACKAGE","-module-cache-path","/Users/loic/Projects/swiftpm-fuzzed/.build/x86_64-apple-macosx10.10/release/ModuleCache","-sanitize=address","-Xfrontend","-color-diagnostics","-sanitize-coverage=edge"]
+    sources: ["/Users/loic/Projects/swiftpm-fuzzed/Sources/ToTest/main.swift"]
+    is-library: false
+    enable-whole-module-optimization: true
+    num-threads: "4"
+

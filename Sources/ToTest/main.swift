@@ -1,19 +1,4 @@
 
-import CBuiltinsNotAvailableInSwift
-
-@inline(never) func foo() -> Void {
-    print(__return_address())
-}
-
-for _ in 0 ..< 3 {
-    foo()
-    foo()
-    print("---")
-}
-
-print(__popcountll(0b1011100101110001))
-
-/*
 import Fuzzer
 import ModuleToTest
 
@@ -26,13 +11,21 @@ extension Int: FuzzInput {
 struct FT: FuzzTarget {
     typealias Input = Int
     func run(_ i: Int) {
-        if i % 2 == i % 3 {
-            print(i)
-        } else {
-            print(bar(i) + 1)
+        switch i % 8 {
+        case 0: print(0)
+        case 1: print(1)
+        case 2: print(3)
+        case 3: print(7)
+        case 4: print(9)
+        case 5: print(4)
+        case 6: print(18)
+        case 7: print(2)
+        default:
+            print(67)
         }
     }
 }
 
+print("go")
 analyze(FT())
-*/
+

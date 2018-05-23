@@ -289,7 +289,7 @@ struct TracePC {
     // what is linker-initialized data
 
     // update feature set is not defined??
-
+    /*
     mutating func addValueForMemcmp(caller: PC, x: UInt8, y: UInt8, n: size_t, stopAtZero: Bool) {
         
         guard n != 0 else { return }
@@ -299,7 +299,7 @@ struct TracePC {
         
         // TODO
     }
-    
+    */
     // for each non zero byte
 }
 
@@ -354,3 +354,10 @@ struct ValueBitMap {
 }
 
 var TPC: TracePC = TracePC.init(numGuards: 0, modules: [], modulePCTables: [], numPCInPCTables: 0, numInline8bitCounters: 0, numModulesWithInline8BitCounters: 0, valueProfileMap: ValueBitMap.init(), observedPCs: [], observedFuncs: [], useCounters: true, useValueProfile: true, printNewPCs: true, printNewFuncs: 1, moduleCounters: [], torc4: TableOfRecentCompares.init(), torc8: TableOfRecentCompares.init())
+
+
+
+
+
+
+

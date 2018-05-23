@@ -42,12 +42,11 @@ public struct Rand {
         return (UInt64(l) << 32) | UInt64(r)
     }
     
-    public mutating func any <T> (_ cast: T.Type) -> T {
+    public mutating func unsafeCast <T> (_ cast: T.Type) -> T {
         let size = MemoryLayout<T>.size
         let ptr = UnsafeMutablePointer<T>.allocate(capacity: 1)
         
         let raw = UnsafeMutableRawBufferPointer(start: UnsafeMutableRawPointer(ptr), count: size)
-        
         
         let (quotient, remainder) = size.quotientAndRemainder(dividingBy: 4)
         for i in 0 ..< quotient {

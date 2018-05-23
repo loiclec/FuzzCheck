@@ -75,6 +75,26 @@ extension Rand {
     public mutating func pick <C: RandomAccessCollection> (from c: C) -> C.Element where C.Index == Int {
         return c[int(inside: c.startIndex ..< c.endIndex)]
     }
+    
+    public mutating func weightedPick <T, C: Sequence> (from c: C) -> T where C.Element == (T, UInt64) {
+        /* e.g.
+        c:
+         [5, 2, 10, 1]
+        accumulatedWeights:
+         [5, 7, 17, 18]
+        randWeight:
+         (uint64 % 18) + 1 -> uniformly (1...18)
+         14
+        return:
+         [5 < 14, 7 < 14, 17 >= 14, ...]
+                            ^ winner
+         return c[winner] (10)
+         */
+        let accumulatedWeights = c.scan(0, { $0 + $1.1 })
+        let randWeight = (self.uint64() % accumulatedWeights.last!) + 1
+        return c.first(where: { $0.1 >= randWeight })!.0
+    }
+    
     public mutating func slice <C: RandomAccessCollection> (of c: C, maxLength: Int) -> C.SubSequence where C.Index == Int {
         guard !c.isEmpty else { return c[c.startIndex ..< c.startIndex] }
         let start = int(inside: c.startIndex ..< c.endIndex)
@@ -90,3 +110,20 @@ extension Rand {
         return pick(from: ts)
     }
 }
+
+extension Sequence {
+    func scan <T> (_ initial: T, _ acc: (T, Element) -> T) -> [T] {
+        var results: [T] = []
+        var t = initial
+        for x in self {
+            results.append(t)
+            t = acc(t, x)
+        }
+        return results
+    }
+}
+
+
+
+
+

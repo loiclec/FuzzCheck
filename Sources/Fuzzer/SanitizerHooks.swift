@@ -3,7 +3,7 @@ import Darwin
 import CBuiltinsNotAvailableInSwift
 
 @_cdecl("__sanitizer_cov_trace_pc_guard") func trace_pc_guard(g: UnsafePointer<UInt32>) {
-    print("trace_pc_guard pc")
+    // print("trace_pc_guard pc")
     let pc = PC(bitPattern: __return_address())
     let idx = Int(g.pointee)
     PCs[idx] = pc
@@ -11,38 +11,38 @@ import CBuiltinsNotAvailableInSwift
 }
 
 @_cdecl("__sanitizer_cov_trace_pc") func trace_pc() {
-    print("trace_pc pc")
+    // print("trace_pc pc")
     let pc = PC(bitPattern: __return_address())
     let idx = Int(pc & ((1 << TracePC.tracePCBits) - 1))
     PCs[idx] = pc
-    eightBitCounters[idx] += 1
+    eightBitCounters[idx] = eightBitCounters[idx] &+ 1
 }
 
 @_cdecl("__sanitizer_cov_trace_pc_guard_init") func trace_pc_guard_init(start: UnsafeMutablePointer<UInt32>, stop: UnsafeMutablePointer<UInt32>) {
-    print("trace_pc_guard_init")
+    // print("trace_pc_guard_init")
     TPC.handleInit(start: start, stop: stop)
 }
 
 @_cdecl("__sanitizer_cov_8bit_counters_init") func eight_bit_counters_init(start: UnsafeMutablePointer<UInt8>, stop: UnsafeMutablePointer<UInt8>) {
-    print("8bit_counters_init")
+    // print("8bit_counters_init")
     TPC.handleInline8BitCountersInit(start: start, stop: stop)
 }
 
 @_cdecl("__sanitizer_cov_pcs_init") func trace_pcs_init(start: UnsafeMutablePointer<uintptr_t>, stop: UnsafeMutablePointer<uintptr_t>) {
-    print("pcs_init start")
+    // print("pcs_init start")
     let start = UnsafeMutableRawPointer(start).bindMemory(to: PCTableEntry.self, capacity: 1)
     let stop = UnsafeMutableRawPointer(stop).bindMemory(to: PCTableEntry.self, capacity: 1)
     TPC.handlePCsInit(start: start, stop: stop)
 }
 
 @_cdecl("__sanitizer_cov_trace_pc_indir") func trace_pc_indir(callee: PC) {
-    print("pc_indir callee")
+    // print("pc_indir callee")
     let caller = PC(bitPattern: __return_address())
     TPC.handleCallerCallee(caller: caller, callee: callee)
 }
 
 @_cdecl("__sanitizer_cov_trace_cmp8") func trace_cmp8(arg1: UInt64, arg2: UInt64) {
-    print("trace_cmp8 arg1")
+    // print("trace_cmp8 arg1")
     let pc = PC(bitPattern: __return_address())
     TPC.handleCmp(pc: pc, arg1: arg1, arg2: arg2)
 }
@@ -51,19 +51,19 @@ import CBuiltinsNotAvailableInSwift
 // the behaviour of __sanitizer_cov_trace_cmp[1248] ones. This, however,
 // should be changed later to make full use of instrumentation.
 @_cdecl("__sanitizer_cov_trace_const_cmp8") func trace_const_cmp8(arg1: UInt64, arg2: UInt64) {
-    print("trace_const_cmp8 arg1")
+    // print("trace_const_cmp8 arg1")
     let pc = PC(bitPattern: __return_address())
     TPC.handleCmp(pc: pc, arg1: arg1, arg2: arg2)
 }
 
 @_cdecl("__sanitizer_cov_trace_cmp4") func trace_cmp4(arg1: UInt32, arg2: UInt32) {
-    print("trace_cmp4 arg1")
+    // print("trace_cmp4 arg1")
     let pc = PC(bitPattern: __return_address())
     TPC.handleCmp(pc: pc, arg1: arg1, arg2: arg2)
 }
 
 @_cdecl("__sanitizer_cov_trace_const_cmp4") func trace_const_cmp4(arg1: UInt32, arg2: UInt32) {
-    print("trace_const_cmp4 arg1")
+    // print("trace_const_cmp4 arg1")
     let pc = PC(bitPattern: __return_address())
     TPC.handleCmp(pc: pc, arg1: arg1, arg2: arg2)
 }
@@ -90,7 +90,7 @@ import CBuiltinsNotAvailableInSwift
 }
 
 @_cdecl("__sanitizer_cov_trace_switch") func trace_switch(val: UInt64, cases: UnsafePointer<UInt64>) {
-    print("trace_switch val: \(val) cases: \(cases)")
+    // print("trace_switch val: \(val) cases: \(cases)")
     let n = cases[0]
     let valSizeInBits = cases[1]
     let vals = cases.advanced(by: 2)
@@ -129,10 +129,10 @@ import CBuiltinsNotAvailableInSwift
     let pc = PC(bitPattern: __return_address())
     TPC.handleCmp(pc: pc, arg1: idx, arg2: 0)
 }
+
 // void __sanitizer_weak_hook_memcmp(void *caller_pc, const void *s1, const void *s2, size_t n, int result)
 // void __sanitizer_weak_hook_strncmp(void *caller_pc, const char *s1, const char *s2, size_t n, int result)
 // etc.
-
 
 /*
  

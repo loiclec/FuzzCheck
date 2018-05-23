@@ -2,6 +2,8 @@
 import CBuiltinsNotAvailableInSwift
 import Darwin
 
+typealias Feature = size_t
+
 struct Word {
     static let maxSize = 64
 }
@@ -208,8 +210,6 @@ struct TracePC {
             // TODO
         }
     }
-    
-    typealias Feature = size_t
     
     func collectFeatures(_ handleFeature: (Feature) -> Void) {
         let Counters = eightBitCounters

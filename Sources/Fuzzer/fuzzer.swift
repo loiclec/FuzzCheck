@@ -17,7 +17,7 @@ struct Fuzzer <F: FuzzTarget> {
 
 extension Fuzzer {
     mutating func runOne(_ f: F, mayDeleteFile: Bool, inputInfoIdx: Int?) -> Bool {
-        let input = F.Input(&rand)
+        let input = f.newInput(&rand)
         
        executeCallback(f)
         
@@ -67,7 +67,7 @@ extension Fuzzer {
         startTime = clock()
         
         // runningCB = true
-        let res = f.run(F.Input(&rand))
+        let res = f.run(f.newInput(&rand))
         assert(res == 0)
         // runningCB = false
         

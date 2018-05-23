@@ -72,11 +72,14 @@ extension Rand {
     public mutating func int(inside: Range<Int>) -> Int {
         return inside.lowerBound + positiveInt(inside.count)
     }
+    public mutating func int(inside: CountableRange<Int>) -> Int {
+        return inside.lowerBound + positiveInt(inside.count)
+    }
     public mutating func pick <C: RandomAccessCollection> (from c: C) -> C.Element where C.Index == Int {
         return c[int(inside: c.startIndex ..< c.endIndex)]
     }
     
-    public mutating func weightedPick <T, C: Sequence> (from c: C) -> T where C.Element == (T, UInt64) {
+    public mutating func weightedPickIndex <T, C: Collection> (from c: C) -> C.Index where C.Element == (T, UInt64), C.Index == Int {
         /* e.g.
         c:
          [5, 2, 10, 1]
@@ -92,7 +95,27 @@ extension Rand {
          */
         let accumulatedWeights = c.scan(0, { $0 + $1.1 })
         let randWeight = (self.uint64() % accumulatedWeights.last!) + 1
-        return c.first(where: { $0.1 >= randWeight })!.0
+        let i = accumulatedWeights.index(where: { $0 >= randWeight })!
+        return i
+    }
+    public mutating func weightedPick <T, C: Collection> (from c: C) -> T where C.Element == (T, UInt64), C.Index == Int {
+        return c[weightedPickIndex(from: c)].0
+    }
+    
+    // TODO: make it lazy
+    public mutating func weightedPicks <T, C: Collection> (from c: C) -> [T] where C.Element == (T, UInt64), C.Index == Int {
+        var picks: [T] = []
+        var accumulatedWeights = c.scan(0, { $0 + $1.1 })
+        for _ in 0 ..< c.count {
+            let randWeight = (self.uint64() % accumulatedWeights.last!) + 1
+            let i = accumulatedWeights.index(where: { $0 >= randWeight })!
+            picks.append(c[i].0)
+            let weightToRemove = c[i].1
+            for j in i ..< accumulatedWeights.endIndex {
+                accumulatedWeights[j] -= weightToRemove
+            }
+        }
+        return picks
     }
     
     public mutating func slice <C: RandomAccessCollection> (of c: C, maxLength: Int) -> C.SubSequence where C.Index == Int {

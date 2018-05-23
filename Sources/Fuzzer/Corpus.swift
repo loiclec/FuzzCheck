@@ -1,30 +1,14 @@
 
-public struct DoubleWidthInt: Hashable {
-    let a: Int
-    let b: Int
-    
-    public var hashValue: Int {
-        return a.hashValue ^ (b.hashValue &* 65371)
-    }
-    
-    public static func == (lhs: DoubleWidthInt, rhs: DoubleWidthInt) -> Bool {
-        return lhs.a == rhs.a && lhs.b == rhs.b
-    }
-}
-
 extension Optional: FuzzInput where Wrapped: FuzzInput {
-    public init(_ rand: inout Rand) {
-        self = .some(Wrapped(&rand))
-    }
     public func complexity() -> Int {
         switch self {
         case .none: return 0
         case .some(let w): return w.complexity()
         }
     }
-    public func hash() -> DoubleWidthInt {
+    public func hash() -> Int {
         switch self {
-        case .none: return DoubleWidthInt.init(a: 0, b: 0)
+        case .none: return 0
         case .some(let w): return w.hash()
         }
     }
@@ -34,8 +18,8 @@ struct Interval {
     
 }
 
-func hashToString(_ h: DoubleWidthInt) -> String {
-    return String(h.a, radix: 16, uppercase: false) + String(h.b, radix: 16, uppercase: false)
+func hashToString(_ h: Int) -> String {
+    return String(h, radix: 16, uppercase: false)
 }
 
 struct Corpus <FI: FuzzInput> {
@@ -56,7 +40,7 @@ struct Corpus <FI: FuzzInput> {
     var intervals: [Interval]
     var weights: [Double]
     
-    var hashes: Set<DoubleWidthInt>
+    var hashes: Set<Int>
     var inputs: [InputInfo]
     
     var numAddedFeatures: Int
@@ -105,7 +89,7 @@ struct Corpus <FI: FuzzInput> {
     }
     
     func chooseUnitIdxToMutate(_ r: inout Rand) -> Int {
-        let weightedInputs = zip(inputs.indices, inputs.map { UInt64($0.numFeatures) })
+        let weightedInputs = Array(zip(inputs.indices, inputs.map { UInt64($0.numFeatures) }))
         return r.weightedPick(from: weightedInputs)
     }
     

@@ -1,6 +1,6 @@
 
 var array: [Int] = []
-
+/*
 @_cdecl("__sanitizer_cov_trace_pc_guard") public func tracepcguard(g: UnsafePointer<UInt32>) {
 	let gp = Int(g.pointee)
 	if array.count <= gp {
@@ -10,7 +10,7 @@ var array: [Int] = []
 
 	print(array)
 }
-
+*/
 var rand = Rand.init(seed: 0)
 
 public func analyze <F: FuzzTarget> (_ f: F) {

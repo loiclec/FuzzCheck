@@ -1,4 +1,19 @@
 
+import CBuiltinsNotAvailableInSwift
+
+@inline(never) func foo() -> Void {
+    print(__return_address())
+}
+
+for _ in 0 ..< 3 {
+    foo()
+    foo()
+    print("---")
+}
+
+print(__popcountll(0b1011100101110001))
+
+/*
 import Fuzzer
 import ModuleToTest
 
@@ -20,3 +35,4 @@ struct FT: FuzzTarget {
 }
 
 analyze(FT())
+*/

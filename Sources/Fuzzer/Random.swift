@@ -134,6 +134,14 @@ extension Rand {
     }
 }
 
+extension Rand {
+    mutating func shuffle <C> (_ c: inout C) where C: MutableCollection, C: RandomAccessCollection, C.Indices == CountableRange<Int> {
+        for i in (0 ..< c.count).reversed() {
+            c.swapAt(int(inside: 0 ..< i+1), i)
+        }
+    }
+}
+
 extension Sequence {
     func scan <T> (_ initial: T, _ acc: (T, Element) -> T) -> [T] {
         var results: [T] = []

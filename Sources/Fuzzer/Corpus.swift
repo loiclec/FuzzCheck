@@ -1,6 +1,6 @@
 
 extension Optional: FuzzInput where Wrapped: FuzzInput {
-    public func complexity() -> Int {
+    public func complexity() -> Double {
         switch self {
         case .none: return 0
         case .some(let w): return w.complexity()
@@ -46,12 +46,12 @@ struct Corpus <FI: FuzzInput> {
     var numAddedFeatures: Int
     var numUpdatedFeatures: Int
     
-    var perFeature: FixedSizeArray<(inputComplexity: Int, simplestElement: Int)>
+    var perFeature: FixedSizeArray<(inputComplexity: Double, simplestElement: Int)>
     
     var outputCorpus: String
     
-    func maxInputComplexity() -> Int {
-        return inputs.max(by: { $0.unit.complexity() < $1.unit.complexity() })?.unit.complexity() ?? 0
+    func maxInputComplexity() -> Double {
+        return inputs.max(by: { $0.unit.complexity() < $1.unit.complexity() })?.unit.complexity() ?? 0.0
     }
     
     mutating func addToCorpus(unit: FI, numFeatures: Int, mayDeleteFile: Bool, featureSet: [Feature]) {
@@ -112,7 +112,7 @@ struct Corpus <FI: FuzzInput> {
         print()
     }
 
-    mutating func addFeature(idx: Int, newComplexity: Int, shrink: Bool) -> Bool {
+    mutating func addFeature(idx: Int, newComplexity: Double, shrink: Bool) -> Bool {
         let idx = idx % perFeature.count
         let (oldComplexity, oldIdx) = perFeature[idx]
         guard oldComplexity == 0 || (shrink && oldComplexity > newComplexity) else {

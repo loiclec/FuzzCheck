@@ -1,11 +1,13 @@
 
-public protocol FuzzInput {
-    func complexity() -> Int
+public protocol FuzzInput: Codable {
+    func complexity() -> Double
     func hash() -> Int
 }
 
 public protocol FuzzTarget {
     associatedtype Input: FuzzInput
+    
+    static func baseInput() -> Input
     
     func newInput(_ r: inout Rand) -> Input
     
@@ -33,7 +35,7 @@ extension Int: FuzzInput {
         self = rand.int()
     }
     
-    public func complexity() -> Int {
+    public func complexity() -> Double {
         return 1
     }
     
@@ -72,7 +74,7 @@ struct IntMutators: Mutators {
 }
 
 extension Array: FuzzInput where Element: FuzzInput {
-    public func complexity() -> Int {
+    public func complexity() -> Double {
         return reduce(1) { $0 + $1.complexity() }
     }
     

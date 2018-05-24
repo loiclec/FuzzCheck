@@ -2,50 +2,67 @@
 import Darwin
 import Foundation
 
-struct Fuzzer <F: FuzzTarget, M: Mutators> where M.Mutated == F.Input {
-    var rand: Rand
-    var uniqueFeaturesSet: Set<Feature>
-    var corpus: Corpus<F.Input>
+let processStartTime = clock()
+
+public final class Fuzzer <F: FuzzTarget, M: Mutators> where M.Mutated == F.Input {
+    var rand: Rand = Rand(seed: 0)
+
+    var corpus: Corpus<F.Input> = Corpus()
+    var currentUnit: F.Input?
     
-    var totalNumberOfRuns: Int
-    var numberOfNewUnitsAdded: Int
-    var lastCorpusUpdateRun: Int
-    var lastCorpusUpdateTime: clock_t
+    var totalNumberOfRuns: Int = 0
+    var numberOfNewUnitsAdded: Int = 0
+    var lastCorpusUpdateRun: Int = 0
+    var lastCorpusUpdateTime: clock_t = 0
     
-    let mutateDepth: Int
-    let maxNumberOfRuns: Int
-    let maxComplexity: Double?
-    let minDefaultComplexity: Double
-    let shuffleAtStartup: Bool
+    let mutateDepth: Int = 1
+    let maxNumberOfRuns: Int = 1_000_000
+    let maxComplexity: Double? = nil
+    let minDefaultComplexity: Double = 256
+    let shuffleAtStartup: Bool = false
+    let printNew: Bool = true
+    let verbosity: Bool = true
+    let saveArtifacts: Bool = true
+    let artifactsPrefix: String = "crashes/"
+    let timeout: Int = 1_000_000
+    var processStartTime = clock()
     
-    var maxInputComplexity: Double
-    var maxMutationComplexity: Double
+    var runningCB = false
     
-    var startTime: clock_t
-    var stopTime: clock_t
+    var maxInputComplexity: Double = 0.0
+    var maxMutationComplexity: Double = 0.0
+    
+    var startTime: clock_t = 0
+    var stopTime: clock_t = 0
     
     let mutators: M
+    let fuzzTarget: F
     
-    let userCallback: (F.Input) -> Bool
+    let shrink: Bool = true
+    let reduceInputs: Bool = true
     
-    let shrink: Bool
-    let reduceInputs: Bool
+    public init(mutators: M, fuzzTarget: F) {
+        self.mutators = mutators
+        self.fuzzTarget = fuzzTarget
+        coordinator._send = self.receive
+        setSignalHandler(timeout: timeout)
+    }
 }
 
 extension Fuzzer {
-    mutating func runOne(_ u: F.Input, mayDeleteFile: Bool, inputInfoIdx: Int?) -> Bool {
+    func runOne(_ u: F.Input, mayDeleteFile: Bool, inputInfoIdx: Int?) -> Bool {
         
         executeCallback(u)
         
-        uniqueFeaturesSet.removeAll()
+        var uniqueFeaturesSetTmp: Set<Feature> = []
         var foundUniqueFeaturesOfII = 0
         let numUpdatesBefore = corpus.numUpdatedFeatures
         
         TPC.collectFeatures { feature in
             if corpus.addFeature(idx: feature, newComplexity: u.complexity(), shrink: shrink) {
-                uniqueFeaturesSet.insert(feature)
+                uniqueFeaturesSetTmp.insert(feature)
             }
-            if reduceInputs, inputInfoIdx != nil, uniqueFeaturesSet.contains(feature) { // TODO: what is inputInfo exactly?
+            if reduceInputs, let iiIdx = inputInfoIdx, corpus.inputs[iiIdx].uniqueFeaturesSet.contains(feature) {
                 foundUniqueFeaturesOfII += 1
             }
         }
@@ -55,7 +72,7 @@ extension Fuzzer {
         let numNewFeatures = corpus.numUpdatedFeatures - numUpdatesBefore
         guard numNewFeatures == 0 else {
             TPC.updateObservedPCs()
-            corpus.addToCorpus(unit: u, numFeatures: numNewFeatures, mayDeleteFile: mayDeleteFile, featureSet: Array(uniqueFeaturesSet))
+            corpus.addToCorpus(unit: u, numFeatures: numNewFeatures, mayDeleteFile: mayDeleteFile, featureSet: Array(uniqueFeaturesSetTmp))
             return true
         }
         
@@ -72,48 +89,86 @@ extension Fuzzer {
         return false
     }
     
-    mutating func executeCallback(_ u: F.Input) {
+    func executeCallback(_ u: F.Input) {
         // TODO: record initial stack
         totalNumberOfRuns += 1
         // assert in fuzzing thread
         // shared memory thingy
-        
         TPC.resetMaps()
-        
+        currentUnit = u
         startTime = clock()
         
-        // runningCB = true
-        let res = userCallback(u)
-        assert(res)
-        // runningCB = false
+        runningCB = true
+        _ = fuzzTarget.run(currentUnit!)
+        runningCB = false
         
         stopTime = clock()
     }
+ 
+    func secondsSinceProcessStartup() -> Double {
+        return Double(clock() - processStartTime) / 1_000_000
+    }
     
-    mutating func mutateAndTestOne() {
+    func execPerSec() -> Double {
+        let seconds = secondsSinceProcessStartup()
+        return seconds != 0 ? (Double(totalNumberOfRuns) / seconds) : 0
+    }
+   
+    func printStats(_ start: String, _ end: String) {
+        guard verbosity else { return }
+        
+        let execps = execPerSec()
+        print("\(totalNumberOfRuns) \(start)", terminator: "")
+        print(" cov: \(TPC.getTotalPCCoverage())", terminator: "")
+        print(" ft: \(corpus.numAddedFeatures)", terminator: "")
+        print(" corp: \(corpus.numActiveUnits())", terminator: "")
+        print(" exec/s: \(Int(execps))", terminator: "")
+        print(" rss: \(getPeakRSSMb())", terminator: "")
+        print(" \(end)")
+    }
+    
+    func printFinalStats() {
+        // print/dump coverage
+        // TODO: options
+        printStats("", "")
+        print("number of executed units : \(totalNumberOfRuns)")
+        print("average exec per sec     : \(execPerSec())")
+        print("new units added          : \(numberOfNewUnitsAdded)")
+        print("slowest unit time sec    : \(0)") // TODO
+        print("peak rss mb              : \(getPeakRSSMb())")
+    }
+    
+    func printStatusForNewUnit(unit: F.Input, text: String) {
+        guard printNew else { return }
+        printStats(text, "")
+        // TODO: complexity and mutation sequence
+    }
+
+    func mutateAndTestOne() {
         // TODO: mutation sequence
         let idx = corpus.chooseUnitIdxToMutate(&rand)
-        guard var unit = corpus.inputs[idx].unit else {
+        guard let unit = corpus.inputs[idx].unit else {
             fatalError("When can this happen? How to handle it?")
         }
+        currentUnit = unit
         // TODO: max mutation length
         
         for _ in 0 ..< rand.positiveInt(mutateDepth)+1 {
             guard totalNumberOfRuns < maxNumberOfRuns else { break }
-            guard mutators.mutate(&unit, &rand) else { continue }
+            guard mutators.mutate(&currentUnit!, &rand) else { continue }
             corpus.inputs[idx].numExecutedMutations += 1
-            if runOne(unit, mayDeleteFile: true, inputInfoIdx: idx) {
-                reportNewCoverage(idx, unit)
+            if runOne(currentUnit!, mayDeleteFile: true, inputInfoIdx: idx) {
+                reportNewCoverage(idx, currentUnit!)
             }
             // try detecting a memory leak
         }
     }
     
-    mutating func reportNewCoverage(_ iiIdx: Int, _ unit: F.Input) {
+    func reportNewCoverage(_ iiIdx: Int, _ unit: F.Input) {
         corpus.inputs[iiIdx].numSuccessfulMutations += 1
         // record successful mutation sequence
-        // print status
-        // write output to corpus
+        printStatusForNewUnit(unit: unit, text: corpus.inputs[iiIdx].reduced ? "REDUCE " : "NEW ")
+        writeToOutputCorpus(unit: unit)
         numberOfNewUnitsAdded += 1
         // check exit on source pos or item
         lastCorpusUpdateRun = totalNumberOfRuns
@@ -125,7 +180,7 @@ extension Fuzzer {
         return false
     }
     
-    mutating func readAndExecuteCorpora(_ dirs: [String]) {
+    func readAndExecuteCorpora(_ dirs: [String]) {
         var units: [F.Input] = []
         for dir in dirs {
             guard let dirFiles = try? FileManager.default.contentsOfDirectory(atPath: dir) else {
@@ -137,7 +192,7 @@ extension Fuzzer {
             for f in dirFiles {
                 let decoder = JSONDecoder()
                 guard
-                    let data = FileManager.default.contents(atPath: "\(dir)\(f)"),
+                    let data = FileManager.default.contents(atPath: "\(dir)/\(f)"),
                     let unit = try? decoder.decode(F.Input.self, from: data)
                 else {
                     print("Could not decode file \(f)")
@@ -188,18 +243,112 @@ extension Fuzzer {
         }
     }
 
-    mutating func setMaxInputComplexity(_ c: Double) {
+    func setMaxInputComplexity(_ c: Double) {
         self.maxInputComplexity = c
         self.maxMutationComplexity = c
     }
-    mutating func minimizeCrashLoop(_ unit: F.Input) {
-        var unit = unit
+    func minimizeCrashLoop(_ unit: F.Input) {
         guard unit.complexity() > 1 else { return }
+        currentUnit = unit
         while !timedOut(), totalNumberOfRuns < maxNumberOfRuns {
-            guard mutators.mutate(&unit, &rand) else { continue } // TODO: potential for infinite loop here
-            executeCallback(unit)
+            guard mutators.mutate(&currentUnit!, &rand) else { continue } // TODO: potential for infinite loop here
+            executeCallback(currentUnit!)
             // print pulse and report slow input
             // try detecting a memory leak
+        }
+    }
+    
+    public func loop(_ dirs: [String]) {
+        processStartTime = clock()
+        printStats("START", "")
+        readAndExecuteCorpora(dirs)
+        printStats("", "")
+        TPC.printNewPCs = true // TODO
+        TPC.printNewFuncs = 0 // TODO
+        // TODO: last corpus reload
+        while true {
+            // TODO: reload interval sec reload
+            guard totalNumberOfRuns < maxNumberOfRuns else { break }
+            guard !timedOut() else { break }
+            // TODO: len control
+            mutateAndTestOne()
+        }
+        print("DONE")
+        // print recommended dictionary
+    }
+
+    func writeToOutputCorpus(unit: F.Input) {
+        guard !corpus.outputCorpus.isEmpty else { return }
+        let path = "\(corpus.outputCorpus)/\(hashToString(unit.hash()))"
+        let encoder = JSONEncoder()
+        do {
+            let data = try encoder.encode(unit)
+            guard FileManager.default.createFile(atPath: path, contents: data, attributes: nil) else {
+                throw NSError.init()
+            }
+        } catch let e {
+            print(e)
+        }
+    }
+    
+    func dumpCurrentUnit(prefix: String) {
+        guard let u = currentUnit else { return } // Happens when running individual inputs.
+        // print mutation sequence
+        print("Base unit: \(hashToString(u.hash()))")
+        print(u)
+        writeUnitToFileWithPrefix(prefix, unit: u)
+    }
+    
+    func writeUnitToFileWithPrefix(_ prefix: String, unit: F.Input) {
+        guard saveArtifacts else { return }
+        let path = artifactsPrefix + prefix + hashToString(unit.hash())
+        let encoder = JSONEncoder()
+        do {
+            let data = try encoder.encode(unit)
+            guard FileManager.default.createFile(atPath: path, contents: data, attributes: nil) else {
+                throw NSError.init()
+            }
+        } catch let e {
+            print(e)
+        }
+        print("artifact_prefix=\(artifactsPrefix)")
+        print("Test unit written to \(path)")
+    }
+    
+    func receive(signal: Coordinator.Signal) {
+        switch signal {
+        case .crash:
+            print("================ CRASH DETECTED ================")
+            // external func print stack trace
+            dumpCurrentUnit(prefix: "crash-")
+            printFinalStats()
+            exit(1)
+       
+        case .alarm:
+            assert(timeout > 0)
+            guard runningCB else { return } // We have not started running units yet.
+            let microseconds = clock() - startTime
+            // TODO: if verbosity
+            guard microseconds > timeout else { return }
+            print(
+            """
+            Alarm: working on the last Unit for \(microseconds / 1000) milliseconds
+                   and the timeout value is \(timeout / 1000) (use -timeout=N to change)
+            """)
+            dumpCurrentUnit(prefix: "timeout-")
+            print("================ TIMEOUT AFTER \(microseconds / 1000) milliseconds ================")
+            print("SUMMARY: libFuzzer: timeout")
+            printFinalStats()
+            exit(1) // TODO: exit code
+            
+        case .fileSizeExceed:
+            print("================ FILE SIZE EXCEEDED ================")
+            exit(1)
+            
+        case .interrupt:
+            print("================ RUN INTERRUPTED ================")
+            printFinalStats()
+            exit(0)
         }
     }
 }

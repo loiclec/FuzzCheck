@@ -1,4 +1,6 @@
 
+import Foundation
+
 extension Optional: FuzzInput where Wrapped: FuzzInput {
     public func complexity() -> Double {
         switch self {
@@ -19,7 +21,8 @@ struct Interval {
 }
 
 func hashToString(_ h: Int) -> String {
-    return String(h, radix: 16, uppercase: false)
+    let bits = UInt64(bitPattern: Int64(h))
+    return String(bits, radix: 16, uppercase: false)
 }
 
 struct Corpus <FI: FuzzInput> {
@@ -35,20 +38,15 @@ struct Corpus <FI: FuzzInput> {
         var uniqueFeaturesSet: [Feature]
     }
     
-    // TODO: piecewise constant distribution
+    var hashes: Set<Int> = []
+    var inputs: [InputInfo] = []
     
-    var intervals: [Interval]
-    var weights: [Double]
+    var numAddedFeatures: Int = 0
+    var numUpdatedFeatures: Int = 0
     
-    var hashes: Set<Int>
-    var inputs: [InputInfo]
+    var perFeature: FixedSizeArray<(inputComplexity: Double, simplestElement: Int)> = FixedSizeArray(repeating: (0, 0), count: 1 << 21)
     
-    var numAddedFeatures: Int
-    var numUpdatedFeatures: Int
-    
-    var perFeature: FixedSizeArray<(inputComplexity: Double, simplestElement: Int)>
-    
-    var outputCorpus: String
+    var outputCorpus: String = "Corpus" // TODO
     
     func maxInputComplexity() -> Double {
         return inputs.max(by: { $0.unit.complexity() < $1.unit.complexity() })?.unit.complexity() ?? 0.0
@@ -66,7 +64,7 @@ struct Corpus <FI: FuzzInput> {
             uniqueFeaturesSet: featureSet
         )
         inputs.append(info)
-        hashes.insert(unit.hash()) // that makes no sense to me
+        hashes.insert(unit.hash())
         // TODO: update corpus distribution
     }
     
@@ -75,7 +73,7 @@ struct Corpus <FI: FuzzInput> {
         assert(unit.complexity() < input.unit.complexity())
         hashes.remove(input.unit.hash())
         
-        // TODO: delete file
+        deleteFile(input: inputs[inputIdx])
         
         hashes.insert(unit.hash())
         input.unit = unit
@@ -91,6 +89,10 @@ struct Corpus <FI: FuzzInput> {
     func chooseUnitIdxToMutate(_ r: inout Rand) -> Int {
         let weightedInputs = Array(zip(inputs.indices, inputs.map { UInt64($0.numFeatures) }))
         return r.weightedPick(from: weightedInputs)
+    }
+    
+    func numActiveUnits() -> Int {
+        return inputs.reduce(0) { $0 + ($1.unit != nil ? 1 : 0) }
     }
     
     func printStats() {
@@ -112,9 +114,12 @@ struct Corpus <FI: FuzzInput> {
         print()
     }
 
+    var uniqueFeaturesHere: Set<Int> = []
+    
     mutating func addFeature(idx: Int, newComplexity: Double, shrink: Bool) -> Bool {
         let idx = idx % perFeature.count
-        let (oldComplexity, oldIdx) = perFeature[idx]
+
+        let (oldComplexity, oldIdx) = perFeature.array[idx]
         guard oldComplexity == 0 || (shrink && oldComplexity > newComplexity) else {
             return false
         }
@@ -126,22 +131,25 @@ struct Corpus <FI: FuzzInput> {
         } else {
             numAddedFeatures += 1
         }
-        numAddedFeatures += 1
+        numUpdatedFeatures += 1
         // TODO: DEBUG
-        perFeature[idx] = (inputComplexity: newComplexity, simplestElement: inputs.count)
-        
+        perFeature.array[idx] = (inputComplexity: newComplexity, simplestElement: inputs.count)
         return true
     }
     
     mutating func deleteFile(input: InputInfo) {
-        // TODO: delete file
+        guard !outputCorpus.isEmpty, input.mayDeleteFile else { return }
+        do {
+            try FileManager.default.removeItem(atPath: "\(outputCorpus)/\(hashToString(input.unit.hash()))")
+        } catch let e {
+            print(e)
+        }
     }
 
     mutating func deleteInput(_ idx: Int) {
         let input = inputs[idx]
         deleteFile(input: input)
-        inputs[idx].unit = nil
-        // TODO: WHAT ABOUT THE OTHER FIELDS?
+        inputs[idx].unit = nil        
         // if debug only
         // print("EVICTED \(idx)")
     }

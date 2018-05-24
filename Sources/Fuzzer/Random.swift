@@ -41,40 +41,21 @@ public struct Rand {
         let r = uint32()
         return (UInt64(l) << 32) | UInt64(r)
     }
-    
-    public mutating func unsafeCast <T> (_ cast: T.Type) -> T {
-        let size = MemoryLayout<T>.size
-        let ptr = UnsafeMutablePointer<T>.allocate(capacity: 1)
-        
-        let raw = UnsafeMutableRawBufferPointer(start: UnsafeMutableRawPointer(ptr), count: size)
-        
-        let (quotient, remainder) = size.quotientAndRemainder(dividingBy: 4)
-        for i in 0 ..< quotient {
-            raw.storeBytes(of: uint32(), toByteOffset: i * 4, as: UInt32.self)
-        }
-        
-        let rd = next31()
-        for i in 0 ..< remainder {
-            // `i` is 0, 1, or 2
-            let byte = UInt8(rd >> (i * 8) & UInt32(0xFF))
-            raw[quotient * 4 + i] = byte
-        }
-        
-        return ptr.pointee
-    }
 }
 
 extension Rand {
     public mutating func positiveInt(_ upperBound: Int) -> Int {
+        precondition(upperBound != 0, "upperBound must be greater than 0")
         return Int(uint64() % UInt64(upperBound))
     }
     
     public mutating func int(inside: Range<Int>) -> Int {
         return inside.lowerBound + positiveInt(inside.count)
     }
+    /*
     public mutating func int(inside: CountableRange<Int>) -> Int {
         return inside.lowerBound + positiveInt(inside.count)
-    }
+    }*/
     public mutating func pick <C: RandomAccessCollection> (from c: C) -> C.Element where C.Index == Int {
         return c[int(inside: c.startIndex ..< c.endIndex)]
     }
@@ -147,8 +128,8 @@ extension Sequence {
         var results: [T] = []
         var t = initial
         for x in self {
-            results.append(t)
             t = acc(t, x)
+            results.append(t)
         }
         return results
     }

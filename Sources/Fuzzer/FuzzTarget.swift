@@ -22,7 +22,7 @@ public protocol Mutators {
     func weightedMutators(for x: Mutated) -> [(Mutator<Mutated>, UInt64)]
 }
 extension Mutators {
-    func mutate(_ x: inout Mutated, _ r: inout Rand) -> Bool {
+    public func mutate(_ x: inout Mutated, _ r: inout Rand) -> Bool {
         for mutator in r.weightedPicks(from: weightedMutators(for: x)) {
             if mutator(&x, &r) { return true }
         }
@@ -31,10 +31,6 @@ extension Mutators {
 }
 
 extension Int: FuzzInput {
-    public init(_ rand: inout Rand) {
-        self = rand.int()
-    }
-    
     public func complexity() -> Double {
         return 1
     }
@@ -44,8 +40,8 @@ extension Int: FuzzInput {
     }
 }
 
-struct IntMutators: Mutators {
-    typealias Mutated = Int
+public struct IntMutators: Mutators {
+    public typealias Mutated = Int
     
     func nudge(_ x: inout Mutated, _ r: inout Rand) -> Bool {
         let add = r.int(inside: -10 ..< 10)
@@ -64,7 +60,9 @@ struct IntMutators: Mutators {
         return x != oldX
     }
     
-    func weightedMutators(for x: Mutated) -> [((inout Mutated, inout Rand) -> Bool, UInt64)] {
+    public init() {}
+    
+    public func weightedMutators(for x: Mutated) -> [((inout Mutated, inout Rand) -> Bool, UInt64)] {
         return [
             (self.special, 10),
             (self.random, 10),
@@ -75,7 +73,7 @@ struct IntMutators: Mutators {
 
 extension Array: FuzzInput where Element: FuzzInput {
     public func complexity() -> Double {
-        return reduce(1) { $0 + $1.complexity() }
+        return Double(1 + count)
     }
     
     public func hash() -> Int {
@@ -83,18 +81,25 @@ extension Array: FuzzInput where Element: FuzzInput {
     }
 }
 
-struct ArrayMutators <M: Mutators> : Mutators {
-    typealias Mutated = Array<M.Mutated>
+public struct ArrayMutators <M: Mutators> : Mutators {
+    public typealias Mutated = Array<M.Mutated>
     
-    let initializeElement: (inout Rand) -> M.Mutated
-    let elementMutators: M
+    public let initializeElement: (inout Rand) -> M.Mutated
+    public let elementMutators: M
+    
+    public init(initializeElement: @escaping (inout Rand) -> M.Mutated, elementMutators: M) {
+        self.initializeElement = initializeElement
+        self.elementMutators = elementMutators
+    }
     
     func appendNew(_ x: inout Mutated, _ r: inout Rand) -> Bool {
+        
         x.append(initializeElement(&r))
         return true
     }
     
     func appendRecycled(_ x: inout Mutated, _ r: inout Rand) -> Bool {
+        
         guard !x.isEmpty else { return false }
         let y = r.pick(from: x)
         x.append(y)
@@ -102,6 +107,8 @@ struct ArrayMutators <M: Mutators> : Mutators {
     }
     
     func appendRepeatedNew(_ x: inout Mutated, _ r: inout Rand) -> Bool {
+        
+        guard !x.isEmpty else { return false }
         let y = initializeElement(&r)
         let count = r.positiveInt(x.count) + 1 // TODO: don't use uniform distribution, favor lower values
         x += repeatElement(y, count: count)
@@ -109,12 +116,15 @@ struct ArrayMutators <M: Mutators> : Mutators {
     }
     
     func insertNew(_ x: inout Mutated, _ r: inout Rand) -> Bool {
+        
+        guard !x.isEmpty else { return false }
         let i = r.int(inside: x.indices)
         x.insert(initializeElement(&r), at: i)
         return true
     }
     
     func insertRecycled(_ x: inout Mutated, _ r: inout Rand) -> Bool {
+        
         guard !x.isEmpty else { return false }
         let y = r.pick(from: x)
         let i = r.int(inside: x.indices)
@@ -123,6 +133,8 @@ struct ArrayMutators <M: Mutators> : Mutators {
     }
     
     func insertRepeatedNew(_ x: inout Mutated, _ r: inout Rand) -> Bool {
+        
+        guard !x.isEmpty else { return false }
         let y = initializeElement(&r)
         let count = r.positiveInt(x.count) + 1 // TODO: don't use uniform distribution, favor lower values
         let i = r.int(inside: x.indices)
@@ -131,33 +143,45 @@ struct ArrayMutators <M: Mutators> : Mutators {
     }
     
     func removeLast(_ x: inout Mutated, _ r: inout Rand) -> Bool {
+        
+        guard !x.isEmpty else { return false }
         x.removeLast()
         return true
     }
     
     func removeFirst(_ x: inout Mutated, _ r: inout Rand) -> Bool {
+        
+        guard !x.isEmpty else { return false }
         x.removeFirst()
         return true
     }
     
     func removeNFirst(_ x: inout Mutated, _ r: inout Rand) -> Bool {
+        
+        guard !x.isEmpty else { return false }
         let count = r.positiveInt(x.count) + 1  // TODO: don't use uniform distribution, favor lower values
         x.removeFirst(count)
         return true
     }
     
     func removeRandom(_ x: inout Mutated, _ r: inout Rand) -> Bool {
+        
+        guard !x.isEmpty else { return false }
         x.remove(at: r.positiveInt(x.endIndex))
         return true
     }
     
     func swap(_ x: inout Mutated, _ r: inout Rand) -> Bool {
+        
+        guard x.count > 1 else { return false }
         let (i, j) = (r.int(inside: x.indices), r.int(inside: x.indices))
         x.swapAt(i, j)
         return i != j
     }
     
     func removeSubrange(_ x: inout Mutated, _ r: inout Rand) -> Bool {
+        
+        guard !x.isEmpty else { return false }
         let start = r.int(inside: x.indices)
         let end = r.int(inside: start ..< x.endIndex)
         x.removeSubrange(start ..< end)
@@ -165,7 +189,10 @@ struct ArrayMutators <M: Mutators> : Mutators {
     }
     
     func moveSubrange(_ x: inout Mutated, _ r: inout Rand) -> Bool {
+        
+        guard x.count > 1 else { return false }
         let sourceStart = r.int(inside: x.indices)
+        guard sourceStart != (x.endIndex-1) else { return false }
         let sourceEnd = r.int(inside: sourceStart ..< x.endIndex)
         
         let destStart = r.int(inside: x.indices)
@@ -176,11 +203,15 @@ struct ArrayMutators <M: Mutators> : Mutators {
     }
     
     func mutateElement(_ x: inout Mutated, _ r: inout Rand) -> Bool {
+        
+        guard !x.isEmpty else { return false }
         let i = r.int(inside: x.indices)
         return elementMutators.mutate(&x[i], &r)
     }
     
     func mutateSubrange(_ x: inout Array<M.Mutated>, _ r: inout Rand) -> Bool {
+        
+        guard !x.isEmpty else { return false }
         let start = r.int(inside: x.indices)
         let end = r.int(inside: start ..< x.endIndex) // TODO: do no use uniform distribution
         var res = false
@@ -190,7 +221,7 @@ struct ArrayMutators <M: Mutators> : Mutators {
         return res
     }
     
-    func replaceCompletely(_ x: inout Array<M.Mutated>, _ r: inout Rand) -> Bool {
+    public func replaceCompletely(_ x: inout Array<M.Mutated>, _ r: inout Rand) -> Bool {
         x.removeAll()
         let count = r.positiveInt(256)
         for _ in 0 ..< count {
@@ -199,7 +230,7 @@ struct ArrayMutators <M: Mutators> : Mutators {
         return true
     }
     
-    func weightedMutators(for x: Mutated) -> [(Mutator<Mutated>, UInt64)] {
+    public func weightedMutators(for x: Mutated) -> [(Mutator<Mutated>, UInt64)] {
         
         let haveRepeatingVariant: [(Mutator<Mutated>, UInt64)] = [
             (self.appendNew, 40),
@@ -211,12 +242,13 @@ struct ArrayMutators <M: Mutators> : Mutators {
             (self.removeLast, 40),
             (self.removeRandom, 40)
         ]
+        /*
         let repeatingVariants = haveRepeatingVariant.map { (m: (Mutator<Mutated>, UInt64)) -> (Mutator<Mutated>, UInt64) in
             let rm = ArrayMutators.repeatMutator(m.0, count: { (r: inout Rand, max: Int) -> Int in
-                return r.positiveInt(max)
+                return r.positiveInt(max+1)
             })
             return (rm, m.1 / 4)
-        }
+        }*//*
         let others: [(Mutator<Mutated>, UInt64)] = [
             (self.appendRepeatedNew, 10),
             (self.insertRepeatedNew, 10),
@@ -227,8 +259,8 @@ struct ArrayMutators <M: Mutators> : Mutators {
             (self.mutateSubrange, 10),
             (self.replaceCompletely, 1)
         ]
-        
-        return haveRepeatingVariant + repeatingVariants + others
+        */
+        return haveRepeatingVariant// + repeatingVariants// + others
     }
     
     static func repeatMutator(_ m: @escaping (inout Mutated, inout Rand) -> Bool, count: @escaping (inout Rand, Int) -> Int) -> (inout Mutated, inout Rand) -> Bool {

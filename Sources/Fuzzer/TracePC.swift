@@ -62,10 +62,18 @@ struct MemMemTable {
 // These are declared as global variables named "__sancov_*" to simplify
 // experiments with inlined instrumentation.
 
+extension UnsafeMutableBufferPointer {
+    static func allocateAndInitializeTo(_ x: Element, capacity: Int) -> UnsafeMutableBufferPointer {
+        let b = UnsafeMutableBufferPointer.allocate(capacity: capacity)
+        b.initialize(repeating: x)
+        return b
+    }
+}
+
 // __sancov_trace_pc_pcs
-var PCs = UnsafeMutableBufferPointer<PC>.allocate(capacity: TracePC.maxNumPCs)
+var PCs = UnsafeMutableBufferPointer<PC>.allocateAndInitializeTo(0, capacity: TracePC.maxNumPCs)
 // __sancov_trace_pc_guard_8bit_counters
-var eightBitCounters = UnsafeMutableBufferPointer<UInt8>.allocate(capacity: TracePC.maxNumPCs)
+var eightBitCounters = UnsafeMutableBufferPointer<UInt8>.allocateAndInitializeTo(0, capacity: TracePC.maxNumPCs)
 
 func counterToFeature <T: BinaryInteger> (_ counter: T) -> CUnsignedInt {
     precondition(counter > 0)
@@ -92,42 +100,48 @@ extension PC {
     }
 }
 
-struct TracePC {
+final class TracePC {
     // How many bits of PC are used from __sanitizer_cov_trace_pc
     static let maxNumPCs: size_t = 1 << 21
     static let tracePCBits: size_t = 18
     
-    var numGuards: size_t
-    var modules: [UnsafeMutableBufferPointer<UInt32>]
+    var numGuards: size_t = 0
+    var modules: [UnsafeMutableBufferPointer<UInt32>] = []
     
-    var modulePCTables: [UnsafeMutableBufferPointer<PCTableEntry>]
-    var numPCInPCTables: size_t
+    var modulePCTables: [UnsafeMutableBufferPointer<PCTableEntry>] = []
+    var numPCInPCTables: size_t = 0
     
-    var numInline8bitCounters: size_t
-    var numModulesWithInline8BitCounters: size_t
+    var numInline8bitCounters: size_t = 0
+    var numModulesWithInline8BitCounters: size_t = 0
     
-    var valueProfileMap: ValueBitMap
+    var valueProfileMap: ValueBitMap = .init()
     
-    var observedPCs: Set<PC>
-    var observedFuncs: Set<PC>
+    var observedPCs: Set<PC> = []
+    var observedFuncs: Set<PC> = []
     
-    var useCounters: Bool
-    var useValueProfile: Bool
-    var printNewPCs: Bool
-    var printNewFuncs: size_t
+    var useCounters: Bool = true
+    var useValueProfile: Bool = true
+    var printNewPCs: Bool = false
+    var printNewFuncs: size_t = 0
     
-    var moduleCounters: [UnsafeMutableBufferPointer<UInt8>]
+    var moduleCounters: [UnsafeMutableBufferPointer<UInt8>] = []
     
-    var torc4: TableOfRecentCompares<UInt32>
-    var torc8: TableOfRecentCompares<UInt64>
+    var torc4: TableOfRecentCompares<UInt32> = .init()
+    var torc8: TableOfRecentCompares<UInt64> = .init()
     // let torcW: TableOfRecentCompares<CUnsignedInt>
     // MemMemTable<1024> MMT;
     
+    init() {}
+    
     func numPCs() -> size_t {
-        return numGuards == 0 ? (1 << TracePC.tracePCBits) : min(TracePC.maxNumPCs, numGuards+1)
+        if numGuards == 0 {
+            return 1 << TracePC.tracePCBits
+        } else {
+            return min(TracePC.maxNumPCs, numGuards+1)
+        }
     }
     
-    mutating func handleInit(start: UnsafeMutablePointer<UInt32>, stop: UnsafeMutablePointer<UInt32>) {
+    func handleInit(start: UnsafeMutablePointer<UInt32>, stop: UnsafeMutablePointer<UInt32>) {
         guard start != stop && start.pointee == 0 else { return }
         // assert
         let buffer = UnsafeMutableBufferPointer(start: start, count: stop - start)
@@ -145,15 +159,15 @@ struct TracePC {
         modules.append(buffer)
     }
     
-    mutating func handlePCsInit(start: UnsafeMutablePointer<PCTableEntry>, stop: UnsafeMutablePointer<PCTableEntry>) {
-        guard modulePCTables.last?.baseAddress != start else { return }
+    func handlePCsInit(start: UnsafeMutablePointer<PCTableEntry>, stop: UnsafeMutablePointer<PCTableEntry>) {
+        guard let l = modulePCTables.last, l.baseAddress != start else { return }
         // assert
         let buffer = UnsafeMutableBufferPointer(start: start, count: stop - start)
         modulePCTables.append(buffer)
         numPCInPCTables += buffer.count
     }
     
-    mutating func handleCallerCallee(caller: uintptr_t, callee: uintptr_t) {
+    func handleCallerCallee(caller: uintptr_t, callee: uintptr_t) {
         let bits: uintptr_t = 12
         let mask = (1 << bits) - 1
         let idx: uintptr_t = (caller & mask) | ((callee & mask) << bits)
@@ -167,7 +181,7 @@ struct TracePC {
         return observedPCs.count
     }
     
-    mutating func updateObservedPCs() {
+    func updateObservedPCs() {
         var coveredFuncs: [PC] = []
         
         func observePC(_ pc: PC) {
@@ -177,14 +191,13 @@ struct TracePC {
         }
         
         func observe(_ TE: PCTableEntry) {
-            if TE.flags & 1 != 0, observedFuncs.insert(TE.pc).inserted, printNewFuncs > 0 {
+            if TE.flags & 1 != 0, observedFuncs.insert(TE.pc).inserted, printNewFuncs != 0 {
                 coveredFuncs.append(TE.pc)
             }
             observePC(TE.pc)
         }
         
-        Cond:
-        if numPCInPCTables > 0 {
+        if numPCInPCTables != 0 {
             if numInline8bitCounters == numPCInPCTables {
                 for i in 0 ..< numModulesWithInline8BitCounters {
                     assert(moduleCounters[i].count == modulePCTables[i].count)
@@ -198,7 +211,7 @@ struct TracePC {
             for i in modules.indices {
                 for j in modules[i].indices {
                     guardIdx += 1
-                    if eightBitCounters[guardIdx] > 0 {
+                    if eightBitCounters[guardIdx] != 0 {
                         observe(modulePCTables[i][j])
                     }
                 }
@@ -221,17 +234,20 @@ struct TracePC {
         
         var firstFeature: Feature = 0
         if numInline8bitCounters == 0 {
-            for i in Counters.indices where Counters[i] != 0 {
+            for i in 0 ..< N where Counters[i] != 0 {
                 handle8BitCounter(handleFeature, firstFeature, i, Counters[i])
             }
             firstFeature += N * 8
         }
         else {
+            var x = 0
             for i in 0 ..< numModulesWithInline8BitCounters {
                 for j in moduleCounters[i].indices where moduleCounters[i][j] != 0 {
+                    x += 1
                     handle8BitCounter(handleFeature, firstFeature, j, moduleCounters[i][j])
                 }
             }
+            print(x)
         }
         // omit clang counters
         // omit extra counters
@@ -244,8 +260,56 @@ struct TracePC {
         
         // omit lowest stack thingy
     }
+    /*
+void TracePC::CollectFeatures(Callback HandleFeature) const {
+  uint8_t *Counters = this->Counters();
+  size_t N = GetNumPCs();
+  auto Handle8bitCounter = [&](size_t FirstFeature,
+                               size_t Idx, uint8_t Counter) {
+    HandleFeature(FirstFeature + Idx * 8 + CounterToFeature(Counter));
+  };
+
+  size_t FirstFeature = 0;
+
+  if (!NumInline8bitCounters) {
+    ForEachNonZeroByte(Counters, Counters + N, FirstFeature, Handle8bitCounter);
+    FirstFeature += N * 8;
+  }
+
+  if (NumInline8bitCounters) {
+    for (size_t i = 0; i < NumModulesWithInline8bitCounters; i++) {
+      ForEachNonZeroByte(ModuleCounters[i].Start, ModuleCounters[i].Stop,
+                         FirstFeature, Handle8bitCounter);
+      FirstFeature += 8 * (ModuleCounters[i].Stop - ModuleCounters[i].Start);
+    }
+  }
+
+  if (size_t NumClangCounters = ClangCountersEnd() - ClangCountersBegin()) {
+    auto P = ClangCountersBegin();
+    for (size_t Idx = 0; Idx < NumClangCounters; Idx++)
+      if (auto Cnt = P[Idx])
+        HandleFeature(FirstFeature + Idx * 8 + CounterToFeature(Cnt));
+    FirstFeature += NumClangCounters;
+  }
+
+  ForEachNonZeroByte(ExtraCountersBegin(), ExtraCountersEnd(), FirstFeature,
+                     Handle8bitCounter);
+  FirstFeature += (ExtraCountersEnd() - ExtraCountersBegin()) * 8;
+
+  if (UseValueProfile) {
+    ValueProfileMap.ForEach([&](size_t Idx) {
+      HandleFeature(FirstFeature + Idx);
+    });
+    FirstFeature += ValueProfileMap.SizeInBits();
+  }
+
+  if (auto MaxStackOffset = GetMaxStackOffset())
+    HandleFeature(FirstFeature + MaxStackOffset);
+}
+
+     */
     
-    mutating func handleInline8BitCountersInit(start: UnsafeMutablePointer<UInt8>, stop: UnsafeMutablePointer<UInt8>) {
+    func handleInline8BitCountersInit(start: UnsafeMutablePointer<UInt8>, stop: UnsafeMutablePointer<UInt8>) {
         guard start != stop else { return }
         guard !(numModulesWithInline8BitCounters != 0 && moduleCounters.last!.baseAddress == start) else {
             return
@@ -256,7 +320,7 @@ struct TracePC {
         numInline8bitCounters += buffer.count
     }
 
-    mutating func handleCmp <T: BinaryInteger> (pc: PC, arg1: T, arg2: T) {
+    func handleCmp <T: BinaryInteger> (pc: PC, arg1: T, arg2: T) {
         let argxor = arg1 ^ arg2
         let argdist = UInt(__popcountll(UInt64(argxor)))
 
@@ -264,19 +328,19 @@ struct TracePC {
         if let (arg1, arg2) = (arg1, arg2) as? (UInt32, UInt32) {
             torc4[numericCast(argxor)] = (arg1, arg2)
         } else if let (arg1, arg2) = (arg1, arg2) as? (UInt64, UInt64) {
-            torc8[numericCast(argxor)] = (arg1, arg2)
+            torc8[numericCast(argxor % (T(Int.max)))] = (arg1, arg2)
         }
         _ = valueProfileMap.addValue(idx)
     }
     
-    mutating func resetMaps() {
+    func resetMaps() {
         valueProfileMap.reset()
         modules.removeAll()
         clearInlineCounters()
         // clear extra and clang counters
     }
     
-    mutating func clearInlineCounters() {
+    func clearInlineCounters() {
         for module in moduleCounters {
             module.assign(repeating: 0)
         }
@@ -353,7 +417,7 @@ struct ValueBitMap {
     }
 }
 
-var TPC: TracePC = TracePC.init(numGuards: 0, modules: [], modulePCTables: [], numPCInPCTables: 0, numInline8bitCounters: 0, numModulesWithInline8BitCounters: 0, valueProfileMap: ValueBitMap.init(), observedPCs: [], observedFuncs: [], useCounters: true, useValueProfile: true, printNewPCs: true, printNewFuncs: 1, moduleCounters: [], torc4: TableOfRecentCompares.init(), torc8: TableOfRecentCompares.init())
+let TPC: TracePC = TracePC.init()
 
 
 

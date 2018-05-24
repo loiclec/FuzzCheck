@@ -42,7 +42,7 @@ import CBuiltinsNotAvailableInSwift
 }
 
 @_cdecl("__sanitizer_cov_trace_cmp8") func trace_cmp8(arg1: UInt64, arg2: UInt64) {
-    // print("trace_cmp8 arg1")
+    // print("trace_cmp8 \(arg1) \(arg2)")
     let pc = PC(bitPattern: __return_address())
     TPC.handleCmp(pc: pc, arg1: arg1, arg2: arg2)
 }
@@ -51,8 +51,9 @@ import CBuiltinsNotAvailableInSwift
 // the behaviour of __sanitizer_cov_trace_cmp[1248] ones. This, however,
 // should be changed later to make full use of instrumentation.
 @_cdecl("__sanitizer_cov_trace_const_cmp8") func trace_const_cmp8(arg1: UInt64, arg2: UInt64) {
-    // print("trace_const_cmp8 arg1")
+    // print("trace_const_cmp8 \(arg1) \(arg2)")
     let pc = PC(bitPattern: __return_address())
+    // print("will handleCmp")
     TPC.handleCmp(pc: pc, arg1: arg1, arg2: arg2)
 }
 
@@ -90,13 +91,13 @@ import CBuiltinsNotAvailableInSwift
 }
 
 @_cdecl("__sanitizer_cov_trace_switch") func trace_switch(val: UInt64, cases: UnsafePointer<UInt64>) {
-    // print("trace_switch val: \(val) cases: \(cases)")
     let n = cases[0]
+    // print("trace_switch val: \(val) n: \(n) cases: \(cases)")
     let valSizeInBits = cases[1]
     let vals = cases.advanced(by: 2)
     // Skip the most common and the most boring case.
     guard !(vals[Int(n - 1)] < 256 && val < 256) else { return }
-    
+
     let pc = PC(bitPattern: __return_address())
     
     var i: Int = 0
@@ -106,6 +107,7 @@ import CBuiltinsNotAvailableInSwift
         token = val ^ vals[i]
         guard val >= vals[i] else { break }
     }
+
     if valSizeInBits == 16 {
         TPC.handleCmp(pc: pc + PC(i), arg1: UInt16(token), arg2: 0)
     } else if valSizeInBits == 32 {

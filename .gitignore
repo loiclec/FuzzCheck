@@ -1,3 +1,4 @@
 .build
 *.xcodeproj
 .DS_Store
+crashes

@@ -1,4 +1,9 @@
 
+extension Rand: RandomNumberGenerator {
+    public mutating func next() -> UInt64 {
+        return uint64()
+    }
+}
 
 public struct Rand {
     
@@ -48,19 +53,31 @@ extension Rand {
         precondition(upperBound != 0, "upperBound must be greater than 0")
         return Int(uint64() % UInt64(upperBound))
     }
-    
+        
     public mutating func int(inside: Range<Int>) -> Int {
         return inside.lowerBound + positiveInt(inside.count)
     }
-    /*
-    public mutating func int(inside: CountableRange<Int>) -> Int {
-        return inside.lowerBound + positiveInt(inside.count)
-    }*/
+    public mutating func integer <I: FixedWidthInteger & UnsignedInteger> (inside: Range<I>) -> I {
+        return inside.lowerBound + next(upperBound: inside.upperBound - inside.lowerBound)
+    }
+
     public mutating func pick <C: RandomAccessCollection> (from c: C) -> C.Element where C.Index == Int {
         return c[int(inside: c.startIndex ..< c.endIndex)]
     }
     
-    public mutating func weightedPickIndex <T, C: Collection> (from c: C) -> C.Index where C.Element == (T, UInt64), C.Index == Int {
+    public mutating func weightedPickIndex <W: RandomAccessCollection> (cumulativeWeights: W) -> W.Index where W.Element: FixedWidthInteger & UnsignedInteger {
+       
+        let randWeight: W.Element = integer(inside: 0 ..< (cumulativeWeights.last ?? 0))
+        
+        switch cumulativeWeights.binarySearch(compare: { $0.compare(randWeight) }) {
+        case .success(let i):
+            return i
+        case .failure(let start, _):
+            return min(cumulativeWeights.index(before: cumulativeWeights.endIndex), start)
+        }
+    }
+    
+    public mutating func weightedPickIndex <T, C: RandomAccessCollection> (from c: C) -> C.Index where C.Element == (T, UInt64), C.Index == Int {
         /* e.g.
         c:
          [5, 2, 10, 1]
@@ -79,12 +96,12 @@ extension Rand {
         let i = accumulatedWeights.index(where: { $0 >= randWeight })!
         return i
     }
-    public mutating func weightedPick <T, C: Collection> (from c: C) -> T where C.Element == (T, UInt64), C.Index == Int {
+    public mutating func weightedPick <T, C: RandomAccessCollection> (from c: C) -> T where C.Element == (T, UInt64), C.Index == Int {
         return c[weightedPickIndex(from: c)].0
     }
     
     // TODO: make it lazy
-    public mutating func weightedPicks <T, C: Collection> (from c: C) -> [T] where C.Element == (T, UInt64), C.Index == Int {
+    public mutating func weightedPicks <T, C: RandomAccessCollection> (from c: C) -> [T] where C.Element == (T, UInt64), C.Index == Int {
         var picks: [T] = []
         var accumulatedWeights = c.scan(0, { $0 + $1.1 })
         for _ in 0 ..< c.count {
@@ -103,7 +120,7 @@ extension Rand {
         guard !c.isEmpty else { return c[c.startIndex ..< c.startIndex] }
         let start = int(inside: c.startIndex ..< c.endIndex)
         let end = 1 + int(inside: start ..< min(c.endIndex, start + maxLength))
-        assert(start != end)
+        precondition(start != end)
         return c[start..<end]
     }
     public mutating func prefix <C: RandomAccessCollection> (of c: C, maxLength: Int) -> C.SubSequence where C.Index == Int {
@@ -134,6 +151,95 @@ extension Sequence {
         return results
     }
 }
+
+//
+//  BinarySearch.swift
+//  MarkdownEditHelpersPackageDescription
+//
+//  Created by Loïc Lecrenier on 29/12/2017.
+//
+
+public enum BinarySearchOrdering {
+    case less
+    case match
+    case greater
+}
+
+extension BinarySearchOrdering {
+    public var opposite: BinarySearchOrdering {
+        switch self {
+        case .less:
+            return .greater
+        case .match:
+            return .match
+        case .greater:
+            return .less
+        }
+    }
+}
+
+
+extension RandomAccessCollection {
+    public func binarySearch(
+        compare: (Element) -> BinarySearchOrdering
+        ) -> BinarySearchResult<Index> {
+        var beforeBound = startIndex
+        var startSearch = startIndex
+        var endSearch = endIndex
+        
+        while startSearch != endSearch {
+            let mid = self.index(startSearch, offsetBy: distance(from: startSearch, to: endSearch) / 2)
+            let candidate = self[mid]
+            switch compare(candidate) {
+            case .less:
+                beforeBound = mid
+                startSearch = index(after: mid)
+            case .match:
+                return .success(mid)
+            case .greater:
+                endSearch = mid
+            }
+        }
+        return .failure(start: beforeBound, end: endSearch)
+    }
+}
+
+public enum BinarySearchResult <Index> {
+    case success(Index)
+    case failure(start: Index, end: Index)
+}
+
+extension BinarySearchResult {
+    public var asOptional: Index? {
+        switch self {
+        case .success(let i):
+            return i
+        case .failure(_):
+            return nil
+        }
+    }
+}
+
+extension Range {
+    public func compare(_ element: Bound) -> BinarySearchOrdering {
+        if lowerBound > element {
+            return .greater
+        } else if upperBound <= element {
+            return .less
+        } else {
+            return .match
+        }
+    }
+}
+
+extension Comparable {
+    public func compare(_ element: Self) -> BinarySearchOrdering {
+        if self > element { return .greater }
+        else if self < element { return .less }
+        else { return .match }
+    }
+}
+
 
 
 

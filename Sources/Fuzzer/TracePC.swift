@@ -2,11 +2,7 @@
 import CBuiltinsNotAvailableInSwift
 import Darwin
 
-typealias Feature = size_t
-
-struct Word {
-    static let maxSize = 64
-}
+typealias Feature = Int
 
 // TableOfRecentCompares (TORC) remembers the most recently performed
 // comparisons of type T.
@@ -16,7 +12,7 @@ struct Word {
 // After the unit has been executed we may decide to use the contents of
 // this table to populate a Dictionary.
 struct TableOfRecentCompares <T> {
-    static var size: size_t { return 32 } // kSizeT
+    static var size: Int { return 32 } // kSizeT
     // TODO: use sourcery to avoid using the heap
     //       or use unsafe pointers or whatever, just make it fast
     var table: [(T, T)?]
@@ -35,20 +31,20 @@ struct TableOfRecentCompares <T> {
 }
 
 /*
-template <size_t kSizeT>
+template <Int kSizeT>
 struct MemMemTable {
-  static const size_t kSize = kSizeT;
+  static const Int kSize = kSizeT;
   Word MemMemWords[kSize];
   Word EmptyWord;
 
-  void Add(const uint8_t *Data, size_t Size) {
+  void Add(const uint8_t *Data, Int Size) {
     if (Size <= 2) return;
     Size = std::min(Size, Word::GetMaxSize());
-    size_t Idx = SimpleFastHash(Data, Size) % kSize;
+    Int Idx = SimpleFastHash(Data, Size) % kSize;
     MemMemWords[Idx].Set(Data, Size);
   }
-  const Word &Get(size_t Idx) {
-    for (size_t i = 0; i < kSize; i++) {
+  const Word &Get(Int Idx) {
+    for (Int i = 0; i < kSize; i++) {
       const Word &W = MemMemWords[(Idx + i) % kSize];
       if (W.size()) return W;
     }
@@ -90,10 +86,10 @@ func counterToFeature <T: BinaryInteger> (_ counter: T) -> CUnsignedInt {
 
 struct PCTableEntry {
     let pc: PC
-    let flags: uintptr_t;
+    let flags: UInt;
 }
 
-typealias PC = uintptr_t
+typealias PC = UInt
 extension PC {
     var positive: Bool {
         return self > 0
@@ -102,27 +98,27 @@ extension PC {
 
 final class TracePC {
     // How many bits of PC are used from __sanitizer_cov_trace_pc
-    static let maxNumPCs: size_t = 1 << 21
-    static let tracePCBits: size_t = 18
+    static let maxNumPCs: Int = 1 << 21
+    static let tracePCBits: Int = 18
     
-    var numGuards: size_t = 0
+    var numGuards: Int = 0
     var modules: [UnsafeMutableBufferPointer<UInt32>] = []
     
     var modulePCTables: [UnsafeMutableBufferPointer<PCTableEntry>] = []
-    var numPCInPCTables: size_t = 0
+    var numPCInPCTables: Int = 0
     
-    var numInline8bitCounters: size_t = 0
-    var numModulesWithInline8BitCounters: size_t = 0
+    var numInline8bitCounters: Int = 0
+    var numModulesWithInline8BitCounters: Int = 0
     
     var valueProfileMap: ValueBitMap = .init()
     
     var observedPCs: Set<PC> = []
     var observedFuncs: Set<PC> = []
     
-    var useCounters: Bool = true
-    var useValueProfile: Bool = true
+    var useCounters: Bool = false
+    var useValueProfile: Bool = false
     var printNewPCs: Bool = false
-    var printNewFuncs: size_t = 0
+    var printNewFuncs: Int = 0
     
     var moduleCounters: [UnsafeMutableBufferPointer<UInt8>] = []
     
@@ -133,7 +129,7 @@ final class TracePC {
     
     init() {}
     
-    func numPCs() -> size_t {
+    func numPCs() -> Int {
         if numGuards == 0 {
             return 1 << TracePC.tracePCBits
         } else {
@@ -143,7 +139,7 @@ final class TracePC {
     
     func handleInit(start: UnsafeMutablePointer<UInt32>, stop: UnsafeMutablePointer<UInt32>) {
         guard start != stop && start.pointee == 0 else { return }
-        // assert
+    
         let buffer = UnsafeMutableBufferPointer(start: start, count: stop - start)
         for i in buffer.indices {
             numGuards += 1
@@ -157,24 +153,42 @@ final class TracePC {
             buffer[i] = UInt32(numGuards % TracePC.maxNumPCs)
         }
         modules.append(buffer)
+        
+        /*
+if (Start == Stop || *Start) return;
+  assert(NumModules < sizeof(Modules) / sizeof(Modules[0]));
+  for (uint32_t *P = Start; P < Stop; P++) {
+    NumGuards++;
+    if (NumGuards == kNumPCs) {
+      RawPrint(
+          "WARNING: The binary has too many instrumented PCs.\n"
+          "         You may want to reduce the size of the binary\n"
+          "         for more efficient fuzzing and precise coverage data\n");
+    }
+    *P = NumGuards % kNumPCs;
+  }
+  Modules[NumModules].Start = Start;
+  Modules[NumModules].Stop = Stop;
+  NumModules++;
+         */
     }
     
     func handlePCsInit(start: UnsafeMutablePointer<PCTableEntry>, stop: UnsafeMutablePointer<PCTableEntry>) {
         guard let l = modulePCTables.last, l.baseAddress != start else { return }
-        // assert
+        // precondition
         let buffer = UnsafeMutableBufferPointer(start: start, count: stop - start)
         modulePCTables.append(buffer)
         numPCInPCTables += buffer.count
     }
     
-    func handleCallerCallee(caller: uintptr_t, callee: uintptr_t) {
-        let bits: uintptr_t = 12
+    func handleCallerCallee(caller: UInt, callee: UInt) {
+        let bits: UInt = 12
         let mask = (1 << bits) - 1
-        let idx: uintptr_t = (caller & mask) | ((callee & mask) << bits)
+        let idx: UInt = (caller & mask) | ((callee & mask) << bits)
         _ = valueProfileMap.addValueModPrime(idx)
     }
     
-    func getTotalPCCoverage() -> size_t {
+    func getTotalPCCoverage() -> Int {
         guard !observedPCs.isEmpty else {
             return (1 ..< numPCs()).reduce(0) { $0 + (PCs[$1].positive ? 1 : 0) }
         }
@@ -200,7 +214,7 @@ final class TracePC {
         if numPCInPCTables != 0 {
             if numInline8bitCounters == numPCInPCTables {
                 for i in 0 ..< numModulesWithInline8BitCounters {
-                    assert(moduleCounters[i].count == modulePCTables[i].count)
+                    precondition(moduleCounters[i].count == modulePCTables[i].count)
                     for j in moduleCounters[i].indices where moduleCounters[i][j] > 0 {
                         observe(modulePCTables[i][j])
                     }
@@ -228,8 +242,8 @@ final class TracePC {
         let Counters = eightBitCounters
         let N = numPCs()
         
-        func handle8BitCounter(_ handleFeature: (Feature) -> Void, _ firstFeature: Feature, _ idx: size_t, _ counter: UInt8) -> Void {
-            handleFeature(firstFeature + idx * 8 + size_t(counterToFeature(counter)))
+        func handle8BitCounter(_ handleFeature: (Feature) -> Void, _ firstFeature: Feature, _ idx: Int, _ counter: UInt8) -> Void {
+            handleFeature(firstFeature + idx/* * 8*/ + Int(counterToFeature(counter)))
         }
         
         var firstFeature: Feature = 0
@@ -237,7 +251,7 @@ final class TracePC {
             for i in 0 ..< N where Counters[i] != 0 {
                 handle8BitCounter(handleFeature, firstFeature, i, Counters[i])
             }
-            firstFeature += N * 8
+            firstFeature += N/* * 8*/
         }
         else {
             var x = 0
@@ -260,16 +274,17 @@ final class TracePC {
         
         // omit lowest stack thingy
     }
+    
     /*
 void TracePC::CollectFeatures(Callback HandleFeature) const {
   uint8_t *Counters = this->Counters();
-  size_t N = GetNumPCs();
-  auto Handle8bitCounter = [&](size_t FirstFeature,
-                               size_t Idx, uint8_t Counter) {
+  Int N = GetNumPCs();
+  auto Handle8bitCounter = [&](Int FirstFeature,
+                               Int Idx, uint8_t Counter) {
     HandleFeature(FirstFeature + Idx * 8 + CounterToFeature(Counter));
   };
 
-  size_t FirstFeature = 0;
+  Int FirstFeature = 0;
 
   if (!NumInline8bitCounters) {
     ForEachNonZeroByte(Counters, Counters + N, FirstFeature, Handle8bitCounter);
@@ -277,16 +292,16 @@ void TracePC::CollectFeatures(Callback HandleFeature) const {
   }
 
   if (NumInline8bitCounters) {
-    for (size_t i = 0; i < NumModulesWithInline8bitCounters; i++) {
+    for (Int i = 0; i < NumModulesWithInline8bitCounters; i++) {
       ForEachNonZeroByte(ModuleCounters[i].Start, ModuleCounters[i].Stop,
                          FirstFeature, Handle8bitCounter);
       FirstFeature += 8 * (ModuleCounters[i].Stop - ModuleCounters[i].Start);
     }
   }
 
-  if (size_t NumClangCounters = ClangCountersEnd() - ClangCountersBegin()) {
+  if (Int NumClangCounters = ClangCountersEnd() - ClangCountersBegin()) {
     auto P = ClangCountersBegin();
-    for (size_t Idx = 0; Idx < NumClangCounters; Idx++)
+    for (Int Idx = 0; Idx < NumClangCounters; Idx++)
       if (auto Cnt = P[Idx])
         HandleFeature(FirstFeature + Idx * 8 + CounterToFeature(Cnt));
     FirstFeature += NumClangCounters;
@@ -297,7 +312,7 @@ void TracePC::CollectFeatures(Callback HandleFeature) const {
   FirstFeature += (ExtraCountersEnd() - ExtraCountersBegin()) * 8;
 
   if (UseValueProfile) {
-    ValueProfileMap.ForEach([&](size_t Idx) {
+    ValueProfileMap.ForEach([&](Int Idx) {
       HandleFeature(FirstFeature + Idx);
     });
     FirstFeature += ValueProfileMap.SizeInBits();
@@ -322,9 +337,9 @@ void TracePC::CollectFeatures(Callback HandleFeature) const {
 
     func handleCmp <T: BinaryInteger> (pc: PC, arg1: T, arg2: T) {
         let argxor = arg1 ^ arg2
-        let argdist = UInt(__popcountll(UInt64(argxor)))
+        let argdist = UInt(__popcountll(UInt64(argxor)) + 1)
 
-        let idx = ((pc & 4095) + 1) * argdist
+        let idx = ((pc & 4095) + 1) &* argdist
         if let (arg1, arg2) = (arg1, arg2) as? (UInt32, UInt32) {
             torc4[numericCast(argxor)] = (arg1, arg2)
         } else if let (arg1, arg2) = (arg1, arg2) as? (UInt64, UInt64) {
@@ -337,6 +352,7 @@ void TracePC::CollectFeatures(Callback HandleFeature) const {
         valueProfileMap.reset()
         modules.removeAll()
         clearInlineCounters()
+        eightBitCounters.assign(repeating: 0)
         // clear extra and clang counters
     }
     
@@ -354,7 +370,7 @@ void TracePC::CollectFeatures(Callback HandleFeature) const {
 
     // update feature set is not defined??
     /*
-    mutating func addValueForMemcmp(caller: PC, x: UInt8, y: UInt8, n: size_t, stopAtZero: Bool) {
+    mutating func addValueForMemcmp(caller: PC, x: UInt8, y: UInt8, n: Int, stopAtZero: Bool) {
         
         guard n != 0 else { return }
 
@@ -368,12 +384,12 @@ void TracePC::CollectFeatures(Callback HandleFeature) const {
 }
 
 struct ValueBitMap {
-    static let mapSizeInBits: uintptr_t = 1 << 16
-    static let mapPrimeMod: uintptr_t = 65371 // Largest Prime < kMapSizeInBits
-    static let bitsInWord = uintptr_t(MemoryLayout<uintptr_t>.size * 8)
-    static let mapSizeInWords: uintptr_t = ValueBitMap.mapSizeInBits / ValueBitMap.bitsInWord
+    static let mapSizeInBits: UInt = 1 << 16
+    static let mapPrimeMod: UInt = 65371 // Largest Prime < kMapSizeInBits
+    static let bitsInWord = UInt(MemoryLayout<UInt>.size * 8)
+    static let mapSizeInWords: UInt = ValueBitMap.mapSizeInBits / ValueBitMap.bitsInWord
     
-    var map: [uintptr_t] = Array(repeating: 0, count: Int(ValueBitMap.mapSizeInWords))
+    var map: [UInt] = Array(repeating: 0, count: Int(ValueBitMap.mapSizeInWords))
     
     mutating func reset() {
         for i in map.indices { map[i] = 0 }
@@ -381,7 +397,7 @@ struct ValueBitMap {
     
     // Computes a hash function of Value and sets the corresponding bit.
     // Returns true if the bit was changed from 0 to 1.
-    mutating func addValue(_ value: uintptr_t) -> Bool {
+    mutating func addValue(_ value: UInt) -> Bool {
         let idx = value % ValueBitMap.mapSizeInBits
         let wordIdx = idx / ValueBitMap.bitsInWord
         let bitIdx = idx % ValueBitMap.bitsInWord
@@ -391,26 +407,26 @@ struct ValueBitMap {
         return new != old
     }
     
-    mutating func addValueModPrime(_ value: uintptr_t) -> Bool {
+    mutating func addValueModPrime(_ value: UInt) -> Bool {
         return addValue(value % ValueBitMap.mapPrimeMod)
     }
     
-    subscript(idx: uintptr_t) -> Bool {
+    subscript(idx: UInt) -> Bool {
         precondition(idx < ValueBitMap.mapSizeInBits)
         let wordIdx = idx / ValueBitMap.bitsInWord
         let bitIdx = idx % ValueBitMap.bitsInWord
-        return (map[Int(wordIdx)] & (1 << bitIdx)) != 0 // TODO: 1UL?
+        return (map[Int(wordIdx)] & (1 << bitIdx)) != 0
     }
     
-    var sizeInBits: uintptr_t { return ValueBitMap.mapSizeInBits }
+    var sizeInBits: UInt { return ValueBitMap.mapSizeInBits }
     
-    func forEach(_ f: (size_t) -> Void) {
+    func forEach(_ f: (Int) -> Void) {
         for i in 0 ..< ValueBitMap.mapSizeInWords {
             let M = map[Int(i)]
             guard M != 0 else { continue }
-            for j in 0 ..< MemoryLayout<uintptr_t>.size * 8 {
-                guard M & (uintptr_t(1) << j) != 0 else { continue }
-                f(Int(i) * MemoryLayout<uintptr_t>.size * 8 + j)
+            for j in 0 ..< MemoryLayout<UInt>.size * 8 {
+                guard M & (UInt(1) << j) != 0 else { continue }
+                f(Int(i) * MemoryLayout<UInt>.size * 8 + j)
             }
             
         }

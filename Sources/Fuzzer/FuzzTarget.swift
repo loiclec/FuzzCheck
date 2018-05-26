@@ -8,7 +8,6 @@ public protocol FuzzTarget {
     associatedtype Input: FuzzInput
     
     static func baseInput() -> Input
-    
     func newInput(_ r: inout Rand) -> Input
     
     func run(_ i: Input) -> Int
@@ -30,6 +29,43 @@ extension Mutators {
     }
 }
 
+public struct IntWrapper: FuzzInput, CustomStringConvertible {
+    public var x: Int
+    
+    public init(x: Int) { self.x = x }
+
+    public func complexity() -> Double {
+        let c = self.x <= 0 ? Double.greatestFiniteMagnitude : (200.0 + (100.0 / Double(self.x))) 
+        // print(self.x, c)
+        return c
+    }
+    
+    public func hash() -> Int {
+        return x
+    }
+
+    public var description: String { return x.description }
+}
+
+
+public struct IntWrapperMutators: Mutators {
+    public typealias Mutated = IntWrapper
+    
+    
+    public init() {}
+    
+    public func a(_ x: inout Mutated, _ r: inout Rand) -> Bool {
+        x.x = x.x &+ r.int(inside: -11 ..< 11)
+        return true
+    }
+    
+    public func weightedMutators(for x: Mutated) -> [((inout Mutated, inout Rand) -> Bool, UInt64)] {
+        return [
+            (self.a, 1)
+        ]
+    }
+}
+/*
 extension Int: FuzzInput {
     public func complexity() -> Double {
         return 1
@@ -65,6 +101,47 @@ public struct IntMutators: Mutators {
     public func weightedMutators(for x: Mutated) -> [((inout Mutated, inout Rand) -> Bool, UInt64)] {
         return [
             (self.special, 10),
+            (self.random, 10),
+            (self.nudge, 10),
+        ]
+    }
+}
+*/
+extension FixedWidthInteger where Self: UnsignedInteger {
+    public func complexity() -> Double {
+        return 1
+    }
+    public func hash() -> Int {
+        return self.hashValue
+    }
+}
+
+public struct UnsignedIntegerMutators <I: FixedWidthInteger & UnsignedInteger & FuzzInput> : Mutators {
+    public typealias Mutated = I
+    
+    func nudge(_ x: inout Mutated, _ r: inout Rand) -> Bool {
+        let nudge = r.integer(inside: (0 as I) ..< (10 as I))
+        let op: (I, I) -> I = r.bool() ? (&-) : (&+)
+        x = op(x, nudge)
+        return true
+    }
+    
+    func random(_ x: inout Mutated, _ r: inout Rand) -> Bool {
+        x = r.next()
+        return true
+    }
+    
+    func special(_ x: inout Mutated, _ r: inout Rand) -> Bool {
+        let oldX = x
+        x = r.bool() ? I.min : I.max
+        return x != oldX
+    }
+    
+    public init() {}
+    
+    public func weightedMutators(for x: Mutated) -> [((inout Mutated, inout Rand) -> Bool, UInt64)] {
+        return [
+            (self.special, 3),
             (self.random, 10),
             (self.nudge, 10),
         ]

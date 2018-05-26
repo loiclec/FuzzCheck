@@ -16,10 +16,6 @@ extension Optional: FuzzInput where Wrapped: FuzzInput {
     }
 }
 
-struct Interval {
-    
-}
-
 func hashToString(_ h: Int) -> String {
     let bits = UInt64(bitPattern: Int64(h))
     return String(bits, radix: 16, uppercase: false)
@@ -40,6 +36,8 @@ struct Corpus <FI: FuzzInput> {
     
     var hashes: Set<Int> = []
     var inputs: [InputInfo] = []
+    
+    var cumulativeWeights: [UInt64] = []
     
     var numAddedFeatures: Int = 0
     var numUpdatedFeatures: Int = 0
@@ -65,12 +63,15 @@ struct Corpus <FI: FuzzInput> {
         )
         inputs.append(info)
         hashes.insert(unit.hash())
-        // TODO: update corpus distribution
+        
+        cumulativeWeights.append((cumulativeWeights.last ?? 0) + UInt64(info.numFeatures) * UInt64(cumulativeWeights.count))
+        validateFeatureSet()
     }
     
     mutating func replace(_ inputIdx: Int, with unit: FI) {
+        
         var input = inputs[inputIdx]
-        assert(unit.complexity() < input.unit.complexity())
+        precondition(unit.complexity() < input.unit.complexity())
         hashes.remove(input.unit.hash())
         
         deleteFile(input: inputs[inputIdx])
@@ -87,8 +88,10 @@ struct Corpus <FI: FuzzInput> {
     }
     
     func chooseUnitIdxToMutate(_ r: inout Rand) -> Int {
-        let weightedInputs = Array(zip(inputs.indices, inputs.map { UInt64($0.numFeatures) }))
-        return r.weightedPick(from: weightedInputs)
+        let x = r.weightedPickIndex(cumulativeWeights: cumulativeWeights)
+        // print(inputs.indices.map { (cumulativeWeights[$0], inputs[$0].unit.map { "\($0)" } ?? "nil") } )
+        return x
+        //return r.weightedPickIndex(cumulativeWeights: cumulativeWeights)
     }
     
     func numActiveUnits() -> Int {
@@ -119,14 +122,14 @@ struct Corpus <FI: FuzzInput> {
     mutating func addFeature(idx: Int, newComplexity: Double, shrink: Bool) -> Bool {
         let idx = idx % perFeature.count
 
-        let (oldComplexity, oldIdx) = perFeature.array[idx]
+        let (oldComplexity, oldSmallestElementIdx) = perFeature.array[idx]
         guard oldComplexity == 0 || (shrink && oldComplexity > newComplexity) else {
             return false
         }
         if oldComplexity > 0 {
-            inputs[oldIdx].numFeatures -= 1
-            if inputs[oldIdx].numFeatures == 0 {
-                deleteInput(oldIdx)
+            inputs[oldSmallestElementIdx].numFeatures -= 1
+            if inputs[oldSmallestElementIdx].numFeatures == 0 {
+                deleteInput(oldSmallestElementIdx)
             }
         } else {
             numAddedFeatures += 1
@@ -136,26 +139,49 @@ struct Corpus <FI: FuzzInput> {
         perFeature.array[idx] = (inputComplexity: newComplexity, simplestElement: inputs.count)
         return true
     }
-    
+    /*
+  bool AddFeature(size_t Idx, uint32_t NewSize, bool Shrink) {
+    assert(NewSize);
+    Idx = Idx % kFeatureSetSize;
+    uint32_t OldSize = GetFeature(Idx);
+    if (OldSize == 0 || (Shrink && OldSize > NewSize)) {
+      if (OldSize > 0) {
+        size_t OldIdx = SmallestElementPerFeature[Idx];
+        InputInfo &II = *Inputs[OldIdx];
+        assert(II.NumFeatures > 0);
+        II.NumFeatures--;
+        if (II.NumFeatures == 0)
+          DeleteInput(OldIdx);
+      } else {
+        NumAddedFeatures++;
+      }
+      NumUpdatedFeatures++;
+      if (FeatureDebug)
+        Printf("ADD FEATURE %zd sz %d\n", Idx, NewSize);
+      SmallestElementPerFeature[Idx] = Inputs.size();
+      InputSizesPerFeature[Idx] = NewSize;
+      return true;
+    }
+    return false;
+  }
+    */
     mutating func deleteFile(input: InputInfo) {
         guard !outputCorpus.isEmpty, input.mayDeleteFile else { return }
-        do {
-            try FileManager.default.removeItem(atPath: "\(outputCorpus)/\(hashToString(input.unit.hash()))")
-        } catch let e {
-            print(e)
-        }
+        let path = "\(outputCorpus)/\(hashToString(input.unit.hash()))" // TODO: more robust solution
+        unlink(path)
+
     }
 
     mutating func deleteInput(_ idx: Int) {
         let input = inputs[idx]
         deleteFile(input: input)
-        inputs[idx].unit = nil        
+        inputs[idx].unit = nil
         // if debug only
         // print("EVICTED \(idx)")
     }
     
     mutating func resetFeatureSet() {
-        assert(inputs.isEmpty)
+        precondition(inputs.isEmpty)
         perFeature.reset(to: (inputComplexity: 0, simplestElement: 0))
     }
     
@@ -168,7 +194,7 @@ struct Corpus <FI: FuzzInput> {
             if input.tmp != input.numFeatures {
                 print("ZZZ \(input.tmp) \(input.numFeatures)")
             }
-            assert(input.tmp == input.numFeatures)
+            precondition(input.tmp == input.numFeatures)
             inputs[i].tmp = 0
         }
     }

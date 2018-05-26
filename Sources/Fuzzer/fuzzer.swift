@@ -2,8 +2,6 @@
 import Darwin
 import Foundation
 
-let processStartTime = clock()
-
 public final class Fuzzer <F: FuzzTarget, M: Mutators> where M.Mutated == F.Input {
     var rand: Rand = Rand(seed: 0)
 
@@ -15,7 +13,7 @@ public final class Fuzzer <F: FuzzTarget, M: Mutators> where M.Mutated == F.Inpu
     var lastCorpusUpdateRun: Int = 0
     var lastCorpusUpdateTime: clock_t = 0
     
-    let mutateDepth: Int = 1
+    let mutateDepth: Int = 20
     let maxNumberOfRuns: Int = 1_000_000
     let maxComplexity: Double? = nil
     let minDefaultComplexity: Double = 256
@@ -51,14 +49,17 @@ public final class Fuzzer <F: FuzzTarget, M: Mutators> where M.Mutated == F.Inpu
 
 extension Fuzzer {
     func runOne(_ u: F.Input, mayDeleteFile: Bool, inputInfoIdx: Int?) -> Bool {
-        
+
         executeCallback(u)
-        
+
         var uniqueFeaturesSetTmp: Set<Feature> = []
         var foundUniqueFeaturesOfII = 0
         let numUpdatesBefore = corpus.numUpdatedFeatures
         
+        var allCollectedFeatures: Set<Feature> = []
+        
         TPC.collectFeatures { feature in
+            allCollectedFeatures.insert(feature)
             if corpus.addFeature(idx: feature, newComplexity: u.complexity(), shrink: shrink) {
                 uniqueFeaturesSetTmp.insert(feature)
             }
@@ -66,7 +67,6 @@ extension Fuzzer {
                 foundUniqueFeaturesOfII += 1
             }
         }
-        
         // TODO: print pulse and report slow inputs
         
         let numNewFeatures = corpus.numUpdatedFeatures - numUpdatesBefore
@@ -83,16 +83,28 @@ extension Fuzzer {
             foundUniqueFeaturesOfII == ii.uniqueFeaturesSet.count,
             ii.unit.complexity() > u.complexity()
         {
+            /*
+            print("""
+                replace \(corpus.inputs[iiIdx]) by \(u)
+                foundUniqueFeaturesOfII: \(foundUniqueFeaturesOfII)
+                ii.uniqueFeaturesSet.count: \(ii.uniqueFeaturesSet.count)
+                ii.unit.complexity(): \(ii.unit.complexity())
+                u.complexity(): \(u.complexity())
+                ii.uniqueFeaturesSet: \(ii.uniqueFeaturesSet.sorted())
+                uniqueFeaturesSetTmp: \(uniqueFeaturesSetTmp.sorted())
+                allFeatures: \(allCollectedFeatures.sorted())
+                """)*/
             corpus.replace(iiIdx, with: u)
             return true
         }
+        
         return false
     }
     
     func executeCallback(_ u: F.Input) {
         // TODO: record initial stack
         totalNumberOfRuns += 1
-        // assert in fuzzing thread
+        // precondition in fuzzing thread
         // shared memory thingy
         TPC.resetMaps()
         currentUnit = u
@@ -138,6 +150,15 @@ extension Fuzzer {
         print("peak rss mb              : \(getPeakRSSMb())")
     }
     
+    func printFeatureSet() {
+        for (i, x) in zip(corpus.perFeature.indices, corpus.perFeature) where x.inputComplexity != 0 {
+            print("[\(i): id \(x.simplestElement) cplx: \(x.inputComplexity.rounded())]")
+        }
+        for (i, x) in zip(corpus.inputs.indices, corpus.inputs) {
+            print("\(i) => \(x.unit.map { "\($0)" } ?? "nil")")
+        }
+    }
+    
     func printStatusForNewUnit(unit: F.Input, text: String) {
         guard printNew else { return }
         printStats(text, "")
@@ -147,9 +168,7 @@ extension Fuzzer {
     func mutateAndTestOne() {
         // TODO: mutation sequence
         let idx = corpus.chooseUnitIdxToMutate(&rand)
-        guard let unit = corpus.inputs[idx].unit else {
-            fatalError("When can this happen? How to handle it?")
-        }
+        let unit = corpus.inputs[idx].unit ?? fuzzTarget.newInput(&rand) // TODO: is this correct?
         currentUnit = unit
         // TODO: max mutation length
         
@@ -185,7 +204,7 @@ extension Fuzzer {
         for dir in dirs {
             guard let dirFiles = try? FileManager.default.contentsOfDirectory(atPath: dir) else {
                 print("Could not read contents of \(dir)")
-                assertionFailure()
+                preconditionFailure()
                 continue
             }
             print("Info: \(dirFiles.count) found in \(dir)")
@@ -196,7 +215,7 @@ extension Fuzzer {
                     let unit = try? decoder.decode(F.Input.self, from: data)
                 else {
                     print("Could not decode file \(f)")
-                    assertionFailure()
+                    preconditionFailure()
                     continue
                 }
                 units.append(unit)
@@ -253,6 +272,7 @@ extension Fuzzer {
         while !timedOut(), totalNumberOfRuns < maxNumberOfRuns {
             guard mutators.mutate(&currentUnit!, &rand) else { continue } // TODO: potential for infinite loop here
             executeCallback(currentUnit!)
+            
             // print pulse and report slow input
             // try detecting a memory leak
         }
@@ -271,6 +291,7 @@ extension Fuzzer {
             guard totalNumberOfRuns < maxNumberOfRuns else { break }
             guard !timedOut() else { break }
             // TODO: len control
+            
             mutateAndTestOne()
         }
         print("DONE")
@@ -325,7 +346,7 @@ extension Fuzzer {
             exit(1)
        
         case .alarm:
-            assert(timeout > 0)
+            precondition(timeout > 0)
             guard runningCB else { return } // We have not started running units yet.
             let microseconds = clock() - startTime
             // TODO: if verbosity
@@ -361,7 +382,7 @@ func getPeakRSSMb() -> Int {
     return r.ru_maxrss >> 20
 }
 
-public func noop <T> (_ t: T) { }
+public func noop <T> (_ t: T) -> Bool { return true }
 
 
 

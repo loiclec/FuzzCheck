@@ -186,15 +186,15 @@ public struct GraphMutators <VM: Mutators> : Mutators where VM.Mutated: Hashable
         return [
             //(self.addVertices, 1),
             (self.addEdges, 1),
-            (self.copySubset, 5),
-            (self.splitEdge, 5),
-            (self.addFriend, 5),
-            (self.moveEdge, 5),
-            (self.addEdge, 30),
-            (self.removeEdge, 10),
-            (self.addVertex, 10),
-            (self.removeVertex, 10),
-            (self.modifyVertexData, 20),
+            (self.copySubset, 6),
+            (self.splitEdge, 11),
+            (self.addFriend, 16),
+            (self.moveEdge, 17),
+            (self.addEdge, 47),
+            (self.removeEdge, 57),
+            (self.addVertex, 67),
+            (self.removeVertex, 77),
+            (self.modifyVertexData, 97),
         ]
     }
 }

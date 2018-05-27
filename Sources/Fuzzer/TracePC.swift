@@ -2,8 +2,6 @@
 import CBuiltinsNotAvailableInSwift
 import Darwin
 
-typealias Feature = Int
-
 extension UnsafeMutableBufferPointer {
     static func allocateAndInitializeTo(_ x: Element, capacity: Int) -> UnsafeMutableBufferPointer {
         let b = UnsafeMutableBufferPointer.allocate(capacity: capacity)
@@ -86,22 +84,22 @@ final class TracePC {
         let Counters = eightBitCounters
         let N = numPCs()
         
-        func handle8BitCounter(_ handleFeature: (Feature) -> Void, _ firstFeature: Feature, _ idx: Int, _ counter: UInt8) -> Void {
-            handleFeature(firstFeature + idx * 8 + Int(counterToFeature(counter)))
+        func handle8BitCounter(_ handleFeature: (Feature) -> Void, _ key: Feature.Key, _ idx: Int, _ counter: UInt8) -> Void {
+            handleFeature(Feature.init(key: key.advanced(by: idx * 8 + Int(counterToFeature(counter))), coverage: .pc))
         }
         
-        var firstFeature: Feature = 0
+        var key: Feature.Key = .init(k: 0)
         
         for i in 0 ..< N where Counters[i] != 0 {
-            handle8BitCounter(handleFeature, firstFeature, i, Counters[i])
+            handle8BitCounter(handleFeature, key, i, Counters[i])
         }
-        firstFeature += N * 8
+        key = key.advanced(by: N * 8)
     
         if useValueProfile {
             valueProfileMap.forEach {
-                handleFeature(firstFeature + $0)
+                handleFeature(Feature.init(key: key.advanced(by: $0), coverage: .valueProfile))
             }
-            firstFeature += Feature(type(of: valueProfileMap).mapSizeInBits)
+            key = key.advanced(by: Int(type(of: valueProfileMap).mapSizeInBits))
         }
     }
     
@@ -116,7 +114,7 @@ final class TracePC {
     func resetMaps() {
         valueProfileMap.reset()
         modules.removeAll()
-        eightBitCounters.assign(repeating: 0)
+        UnsafeMutableBufferPointer(rebasing: eightBitCounters[..<numPCs()]).assign(repeating: 0)
     }
 }
 

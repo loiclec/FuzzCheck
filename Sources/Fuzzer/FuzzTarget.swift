@@ -22,7 +22,9 @@ public protocol Mutators {
 }
 extension Mutators {
     public func mutate(_ x: inout Mutated, _ r: inout Rand) -> Bool {
-        for mutator in r.weightedPicks(from: weightedMutators(for: x)) {
+        let mutators = weightedMutators(for: x)
+        for _ in 0 ..< mutators.count {
+            let mutator = r.weightedPick(from: mutators)
             if mutator(&x, &r) { return true }
         }
         return false
@@ -141,9 +143,9 @@ public struct UnsignedIntegerMutators <I: FixedWidthInteger & UnsignedInteger & 
     
     public func weightedMutators(for x: Mutated) -> [((inout Mutated, inout Rand) -> Bool, UInt64)] {
         return [
-            //(self.special, 3),
-            (self.random, 10),
-            (self.nudge, 10),
+            (self.special, 1),
+            (self.random, 11),
+            (self.nudge, 21),
         ]
     }
 }
@@ -311,13 +313,13 @@ public struct ArrayMutators <M: Mutators> : Mutators {
         
         let haveRepeatingVariant: [(Mutator<Mutated>, UInt64)] = [
             (self.appendNew, 40),
-            (self.appendRecycled, 40),
-            (self.insertNew, 40),
-            (self.insertRecycled, 40),
-            (self.mutateElement, 20 + UInt64(x.count / 4)),
-            (self.swap, 20 + UInt64(x.count / 4)),
-            (self.removeLast, 40),
-            (self.removeRandom, 40)
+            (self.appendRecycled, 80),
+            (self.insertNew, 120),
+            (self.insertRecycled, 160),
+            (self.mutateElement, 300),
+            (self.swap, 380),
+            (self.removeLast, 420),
+            (self.removeRandom, 460)
         ]
         /*
         let repeatingVariants = haveRepeatingVariant.map { (m: (Mutator<Mutated>, UInt64)) -> (Mutator<Mutated>, UInt64) in

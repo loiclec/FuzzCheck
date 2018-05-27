@@ -21,17 +21,21 @@ public func hashToString(_ h: Int) -> String {
     return String(bits, radix: 16, uppercase: false)
 }
 
+enum CorpusIndex {
+    case null
+    case idx(Int)
+}
+
 struct Corpus <FI: FuzzInput> {
 
     struct InputInfo {
         var unit: FI?
-        var numFeatures: Int
-        var tmp: Int
+        var coverageScore: Feature.Coverage.Score
         var numExecutedMutations: Int
         var numSuccessfulMutations: Int
         var mayDeleteFile: Bool
         var reduced: Bool
-        var uniqueFeaturesSet: [Feature]
+        var uniqueFeaturesSet: [Feature.Key]
     }
     
     var hashes: Set<Int> = []
@@ -39,10 +43,10 @@ struct Corpus <FI: FuzzInput> {
     
     var cumulativeWeights: [UInt64] = []
     
-    var numAddedFeatures: Int = 0
-    var numUpdatedFeatures: Int = 0
+    var addedCoverageScore: Feature.Coverage.Score = .init(s: 0)
+    var updatedCoverageScore: Feature.Coverage.Score = .init(s: 0)
     
-    var perFeature = UnsafeMutableBufferPointer<(inputComplexity: Double, simplestElement: Int)>.allocateAndInitializeTo((0, 0), capacity: 1 << 21) // FixedSizeArray<(inputComplexity: Double, simplestElement: Int)> = FixedSizeArray(repeating: (0, 0), count: 1 << 21)
+    var inputInfoForFeature = FeatureDictionary.createEmpty()
     
     var outputCorpus: String = "Corpus" // TODO
     
@@ -50,11 +54,10 @@ struct Corpus <FI: FuzzInput> {
         return inputs.max(by: { $0.unit.complexity() < $1.unit.complexity() })?.unit.complexity() ?? 0.0
     }
     
-    mutating func addToCorpus(unit: FI, numFeatures: Int, mayDeleteFile: Bool, featureSet: [Feature]) {
+    mutating func addToCorpus(unit: FI, coverageScore: Feature.Coverage.Score, mayDeleteFile: Bool, featureSet: [Feature.Key]) {
         let info = InputInfo.init(
             unit: unit,
-            numFeatures: numFeatures,
-            tmp: 0,
+            coverageScore: coverageScore,
             numExecutedMutations: 0,
             numSuccessfulMutations: 0,
             mayDeleteFile: mayDeleteFile,
@@ -66,13 +69,15 @@ struct Corpus <FI: FuzzInput> {
         
         print(hashToString(unit.hash()))
         
-        validateFeatureSet()
         updateCumulativeWeights()
     }
     
     mutating func updateCumulativeWeights() {
         cumulativeWeights.removeAll()
-        cumulativeWeights = inputs.enumerated().scan(0, { $0 + UInt64($1.element.numFeatures) * UInt64($1.offset+1) })
+        cumulativeWeights = inputs.enumerated().scan(0, { (weight, next) in
+            let (offset, input) = next
+            return weight + UInt64(input.coverageScore.s) * UInt64(offset+1)
+        })
         
         //print(cumulativeWeights)
         //print(inputs.enumerated().map {
@@ -118,38 +123,47 @@ struct Corpus <FI: FuzzInput> {
         }
     }
     func printFeatureSet() {
-        for (i, (inputComplexity: complexity, simplestElement: simplestElement)) in zip(perFeature.indices, perFeature) where complexity != 0 {
+        for case (let i, (.magnitudeOf(let complexity), let simplestElement)) in zip(inputInfoForFeature.indices, inputInfoForFeature) {
             print("[\(i): id \(simplestElement) complexity: \(complexity)]")
         }
         print()
-        for (x, i) in zip(inputs, inputs.indices) where x.numFeatures != 0 {
-            print(" \(i)=>\(x.numFeatures)")
+        for (x, i) in zip(inputs, inputs.indices) where x.coverageScore.s != 0 {
+            print(" \(i)=>\(x.coverageScore)")
         }
         print()
     }
 
     var uniqueFeaturesHere: Set<Int> = []
     
-    mutating func addFeature(idx: Int, newComplexity: Double, shrink: Bool) -> Bool {
-        let idx = idx % perFeature.count
-
-        let (oldComplexity, oldSmallestElementIdx) = perFeature[idx]
+    mutating func addFeature(_ feature: Feature, newComplexity: Double, shrink: Bool) -> Bool {
+        precondition(newComplexity != 0.0)
+        let (oldComplexity, oldSmallestElementIdx) = inputInfoForFeature[feature.key]
+        
+        if case .magnitudeOf(let oldC) = oldComplexity {
+            guard shrink && oldC > newComplexity else {
+                return false
+            }
+        }
+        /*
         guard oldComplexity == 0 || (shrink && oldComplexity > newComplexity) else {
             return false
         }
-        if oldComplexity > 0 {
-            inputs[oldSmallestElementIdx].numFeatures -= 1
-            if inputs[oldSmallestElementIdx].numFeatures == 0 {
+
+         */
+        
+        let covScore = feature.coverage.importance
+        
+        if case .idx(let oldSmallestElementIdx) = oldSmallestElementIdx {
+            inputs[oldSmallestElementIdx].coverageScore.s -= covScore.s
+            if inputs[oldSmallestElementIdx].coverageScore.s == 0 {
                 deleteInput(oldSmallestElementIdx)
             }
         } else {
-            numAddedFeatures += 1
+            addedCoverageScore.s += covScore.s
         }
-        numUpdatedFeatures += 1
-        // TODO: DEBUG
-        perFeature[idx] = (inputComplexity: newComplexity, simplestElement: inputs.count)
+        updatedCoverageScore.s += covScore.s
         
-        
+        inputInfoForFeature[feature.key] = (inputComplexity: .magnitudeOf(newComplexity), simplestElement: .idx(inputs.count))
         
         return true
     }
@@ -171,20 +185,6 @@ struct Corpus <FI: FuzzInput> {
     
     mutating func resetFeatureSet() {
         precondition(inputs.isEmpty)
-        perFeature.assign(repeating: (0, 0))
-    }
-    
-    mutating func validateFeatureSet() {
-        // TODO: debug
-        for x in perFeature where x.inputComplexity != 0 {
-            inputs[x.simplestElement].tmp += 1
-        }
-        for (input, i) in zip(inputs, inputs.indices) {
-            if input.tmp != input.numFeatures {
-                print("ZZZ \(input.tmp) \(input.numFeatures)")
-            }
-            precondition(input.tmp == input.numFeatures)
-            inputs[i].tmp = 0
-        }
+        inputInfoForFeature.assign(repeating: (.zero, .null))
     }
 }

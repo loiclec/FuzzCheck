@@ -68,55 +68,34 @@ extension Rand {
     public mutating func weightedPickIndex <W: RandomAccessCollection> (cumulativeWeights: W) -> W.Index where W.Element: FixedWidthInteger & UnsignedInteger {
        
         let randWeight: W.Element = integer(inside: 0 ..< (cumulativeWeights.last ?? 0))
-        /*
+        
         switch cumulativeWeights.binarySearch(compare: { $0.compare(randWeight) }) {
         case .success(let i):
-            return i
-        case .failure(let start, _):
-            return min(cumulativeWeights.index(before: cumulativeWeights.endIndex), start)
-        }*/
-        //let randWeight = (self.integer(inside: 0 ..< cumulativeWeights.last!)) + 1
-        let i = cumulativeWeights.index(where: { $0 > randWeight })!
-        return i
-    }
-    
-    public mutating func weightedPickIndex <T, C: RandomAccessCollection> (from c: C) -> C.Index where C.Element == (T, UInt64), C.Index == Int {
-        /* e.g.
-        c:
-         [5, 2, 10, 1]
-        accumulatedWeights:
-         [5, 7, 17, 18]
-        randWeight:
-         (uint64 % 18) + 1 -> uniformly (1...18)
-         14
-        return:
-         [5 < 14, 7 < 14, 17 >= 14, ...]
-                            ^ winner
-         return c[winner] (10)
-         */
-        let accumulatedWeights = c.scan(0, { $0 + $1.1 })
-        let randWeight = (self.uint64() % accumulatedWeights.last!) + 1
-        let i = accumulatedWeights.index(where: { $0 > randWeight })!
-        return i
-    }
-    public mutating func weightedPick <T, C: RandomAccessCollection> (from c: C) -> T where C.Element == (T, UInt64), C.Index == Int {
-        return c[weightedPickIndex(from: c)].0
-    }
-    
-    // TODO: make it lazy
-    public mutating func weightedPicks <T, C: RandomAccessCollection> (from c: C) -> [T] where C.Element == (T, UInt64), C.Index == Int {
-        var picks: [T] = []
-        var accumulatedWeights = c.scan(0, { $0 + $1.1 })
-        for _ in 0 ..< c.count {
-            let randWeight = (self.uint64() % accumulatedWeights.last!) + 1
-            let i = accumulatedWeights.index(where: { $0 >= randWeight })!
-            picks.append(c[i].0)
-            let weightToRemove = c[i].1
-            for j in i ..< accumulatedWeights.endIndex {
-                accumulatedWeights[j] -= weightToRemove
-            }
+            return min(cumulativeWeights.index(before: cumulativeWeights.endIndex), cumulativeWeights.index(after: i))
+        case .failure(_, let end):
+            return min(cumulativeWeights.index(before: cumulativeWeights.endIndex), end)
         }
-        return picks
+        //let randWeight = (self.integer(inside: 0 ..< cumulativeWeights.last!)) + 1
+        //let i = cumulativeWeights.index(where: { $0 > randWeight })!
+        //return i
+    }
+    public mutating func weightedPickIndex <A, B, W: RandomAccessCollection> (cumulativeWeights: W) -> W.Index where W.Element == (A, B), B: FixedWidthInteger & UnsignedInteger {
+        
+        let randWeight: B = integer(inside: 0 ..< (cumulativeWeights.last?.1 ?? 0))
+        
+        switch cumulativeWeights.binarySearch(compare: { $0.1.compare(randWeight) }) {
+        case .success(let i):
+            return min(cumulativeWeights.index(before: cumulativeWeights.endIndex), cumulativeWeights.index(after: i))
+        case .failure(_, let end):
+            return min(cumulativeWeights.index(before: cumulativeWeights.endIndex), end)
+        }
+        //let randWeight = (self.integer(inside: 0 ..< cumulativeWeights.last!)) + 1
+        //let i = cumulativeWeights.index(where: { $0 > randWeight })!
+        //return i
+    }
+    
+    public mutating func weightedPick <T, C: RandomAccessCollection> (from c: C) -> T where C.Element == (T, UInt64), C.Index == Int {
+        return c[weightedPickIndex(cumulativeWeights: c)].0
     }
     
     public mutating func slice <C: RandomAccessCollection> (of c: C, maxLength: Int) -> C.SubSequence where C.Index == Int {

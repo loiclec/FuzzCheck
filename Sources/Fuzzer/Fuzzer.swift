@@ -10,15 +10,11 @@ public final class Fuzzer <F: FuzzTarget, M: Mutators> where M.Mutated == F.Inpu
     
     var totalNumberOfRuns: Int = 0
     var numberOfNewUnitsAdded: Int = 0
-    var lastCorpusUpdateRun: Int = 0
-    var lastCorpusUpdateTime: clock_t = 0
     
     let mutateDepth: Int = 3
     let maxNumberOfRuns: Int = 10_000_000
-    let maxComplexity: Double? = nil
-    let minDefaultComplexity: Double = 256
+    
     let shuffleAtStartup: Bool = false
-    let printNew: Bool = true
     let verbosity: Bool = true
     let saveArtifacts: Bool = true
     let artifactsPrefix: String = "crashes/"
@@ -28,7 +24,7 @@ public final class Fuzzer <F: FuzzTarget, M: Mutators> where M.Mutated == F.Inpu
     var runningCB = false
     
     var maxInputComplexity: Double = 0.0
-    var maxMutationComplexity: Double = 0.0
+    let defaultMaxInputComplexity: Double = 256
     
     var startTime: clock_t = 0
     var stopTime: clock_t = 0
@@ -54,25 +50,22 @@ extension Fuzzer {
 
         executeCallback(u)
 
-        var uniqueFeaturesSetTmp: Set<Feature> = []
+        var uniqueFeaturesSetTmp: Set<Feature.Key> = []
         var foundUniqueFeaturesOfII = 0
-        let numUpdatesBefore = corpus.numUpdatedFeatures
-        
+        let updateScoreBefore = corpus.updatedCoverageScore
         
         TPC.collectFeatures { feature in
-            if corpus.addFeature(idx: feature, newComplexity: u.complexity(), shrink: shrink) {
-                uniqueFeaturesSetTmp.insert(feature)
+            if corpus.addFeature(feature, newComplexity: u.complexity(), shrink: shrink) {
+                uniqueFeaturesSetTmp.insert(feature.key)
             }
-            if reduceInputs, let iiIdx = inputInfoIdx, corpus.inputs[iiIdx].uniqueFeaturesSet.contains(feature) {
+            if reduceInputs, let iiIdx = inputInfoIdx, corpus.inputs[iiIdx].uniqueFeaturesSet.contains(feature.key) {
                 foundUniqueFeaturesOfII += 1
             }
         }
-        // TODO: print pulse and report slow inputs
         
-        let numNewFeatures = corpus.numUpdatedFeatures - numUpdatesBefore
-        guard numNewFeatures == 0 else {
-            //TPC.updateObservedPCs()
-            corpus.addToCorpus(unit: u, numFeatures: numNewFeatures, mayDeleteFile: mayDeleteFile, featureSet: Array(uniqueFeaturesSetTmp))
+        let deltaScore = Feature.Coverage.Score(s: corpus.updatedCoverageScore.s - updateScoreBefore.s)
+        guard deltaScore.s == 0 else {
+            corpus.addToCorpus(unit: u, coverageScore: deltaScore, mayDeleteFile: mayDeleteFile, featureSet: Array(uniqueFeaturesSetTmp))
             return true
         }
         
@@ -83,17 +76,6 @@ extension Fuzzer {
             foundUniqueFeaturesOfII == ii.uniqueFeaturesSet.count,
             ii.unit.complexity() > u.complexity()
         {
-            /*
-            print("""
-                replace \(corpus.inputs[iiIdx]) by \(u)
-                foundUniqueFeaturesOfII: \(foundUniqueFeaturesOfII)
-                ii.uniqueFeaturesSet.count: \(ii.uniqueFeaturesSet.count)
-                ii.unit.complexity(): \(ii.unit.complexity())
-                u.complexity(): \(u.complexity())
-                ii.uniqueFeaturesSet: \(ii.uniqueFeaturesSet.sorted())
-                uniqueFeaturesSetTmp: \(uniqueFeaturesSetTmp.sorted())
-                allFeatures: \(allCollectedFeatures.sorted())
-                """)*/
             corpus.replace(iiIdx, with: u)
             return true
         }
@@ -102,10 +84,7 @@ extension Fuzzer {
     }
     
     func executeCallback(_ u: F.Input) {
-        // TODO: record initial stack
         totalNumberOfRuns += 1
-        // precondition in fuzzing thread
-        // shared memory thingy
         TPC.resetMaps()
         currentUnit = u
         startTime = clock()
@@ -132,7 +111,7 @@ extension Fuzzer {
         let execps = execPerSec()
         print("\(totalNumberOfRuns) \(start)", terminator: "")
         print(" cov: \(TPC.getTotalPCCoverage())", terminator: "")
-        print(" ft: \(corpus.numAddedFeatures)", terminator: "")
+        print(" score: \(corpus.addedCoverageScore)", terminator: "")
         print(" corp: \(corpus.numActiveUnits())", terminator: "")
         print(" exec/s: \(Int(execps))", terminator: "")
         print(" rss: \(getPeakRSSMb())", terminator: "")
@@ -151,8 +130,8 @@ extension Fuzzer {
     }
     
     func printFeatureSet() {
-        for (i, x) in zip(corpus.perFeature.indices, corpus.perFeature) where x.inputComplexity != 0 {
-            print("[\(i): id \(x.simplestElement) cplx: \(x.inputComplexity.rounded())]")
+        for case (let i, let (.magnitudeOf(complexity), simplestElement)) in zip(corpus.inputInfoForFeature.indices, corpus.inputInfoForFeature) {
+            print("[\(i): id \(simplestElement) cplx: \(complexity.rounded())]")
         }
         for (i, x) in zip(corpus.inputs.indices, corpus.inputs) {
             print("\(i) => \(x.unit.map { "\($0)" } ?? "nil")")
@@ -160,7 +139,6 @@ extension Fuzzer {
     }
     
     func printStatusForNewUnit(unit: F.Input, text: String) {
-        guard printNew else { return }
         printStats(text, "")
         // TODO: complexity and mutation sequence
     }
@@ -190,8 +168,6 @@ extension Fuzzer {
         writeToOutputCorpus(unit: unit)
         numberOfNewUnitsAdded += 1
         // check exit on source pos or item
-        lastCorpusUpdateRun = totalNumberOfRuns
-        lastCorpusUpdateTime = clock()
     }
     
     func timedOut() -> Bool {
@@ -226,9 +202,11 @@ extension Fuzzer {
         let maxUnitComplexity = complexities.reduce(0.0) { max($0, $1) }
         let minUnitComplexity = complexities.reduce(Double.greatestFiniteMagnitude) { min($0, $1) }
         
-        if maxComplexity == nil {
-            setMaxInputComplexity(max(minDefaultComplexity, maxInputComplexity))
+        
+        if maxInputComplexity == 0 {
+            maxInputComplexity = defaultMaxInputComplexity
         }
+        
         
         defer {
             // Test the callback with empty input and never try it again.
@@ -262,17 +240,13 @@ extension Fuzzer {
         }
     }
 
-    func setMaxInputComplexity(_ c: Double) {
-        self.maxInputComplexity = c
-        self.maxMutationComplexity = c
-    }
     func minimizeCrashLoop(_ unit: F.Input) {
         guard unit.complexity() > 1 else { return }
         currentUnit = unit
         while !timedOut(), totalNumberOfRuns < maxNumberOfRuns {
-            guard mutators.mutate(&currentUnit!, &rand) else { continue } // TODO: potential for infinite loop here
-            executeCallback(currentUnit!)
+            guard mutators.mutate(&currentUnit!, &rand) else { continue }
             
+            executeCallback(currentUnit!)
             // print pulse and report slow input
             // try detecting a memory leak
         }
@@ -347,7 +321,6 @@ extension Fuzzer {
             precondition(timeout > 0)
             guard runningCB else { return } // We have not started running units yet.
             let microseconds = clock() - startTime
-            // TODO: if verbosity
             guard microseconds > timeout else { return }
             print(
             """

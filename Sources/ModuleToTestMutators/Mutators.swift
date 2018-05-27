@@ -49,9 +49,7 @@ extension Graph: FuzzInput where V: FuzzInput, V: Hashable {
     }
     
     public func hash() -> Int {
-        var h = Hasher.init()
-        h.combine(1)
-        h = reduce(into: h) { (h: inout Hasher, v: Vertex) in
+        let h = reduce(into: Hasher()) { (h: inout Hasher, v: Vertex) in
             h.combine(v.data)
             h.combine(v.edges)
         }
@@ -136,6 +134,17 @@ public struct GraphMutators <VM: Mutators> : Mutators where VM.Mutated: Hashable
         x.addEdge(from: vi, to: vj)
         return true
     }
+    func addEdges(_ x: inout Mutated, _ r: inout Rand) -> Bool {
+        guard !x.isEmpty else { return false }
+        let vi = r.positiveInt(x.count)
+        
+        let count = r.positiveInt(r.bool() ? 20 : x.graph.count)
+        for _ in 0 ..< count {
+            let vj = r.positiveInt(x.count)
+            x.addEdge(from: vi, to: vj)
+        }
+        return true
+    }
     
     func removeEdge(_ x: inout Mutated, _ r: inout Rand) -> Bool {
         guard !x.isEmpty else { return false }
@@ -149,6 +158,13 @@ public struct GraphMutators <VM: Mutators> : Mutators where VM.Mutated: Hashable
     
     func addVertex(_ x: inout Mutated, _ r: inout Rand) -> Bool {
         _ = x.addVertex(initializeVertex(&r))
+        return true
+    }
+    func addVertices(_ x: inout Mutated, _ r: inout Rand) -> Bool {
+        let count = r.positiveInt(max(20, x.graph.count))
+        for _ in 0 ..< count {
+            _ = x.addVertex(initializeVertex(&r))
+        }
         return true
     }
     
@@ -168,15 +184,17 @@ public struct GraphMutators <VM: Mutators> : Mutators where VM.Mutated: Hashable
     
     public func weightedMutators(for x: Mutated) -> [((inout Mutated, inout Rand) -> Bool, UInt64)] {
         return [
+            //(self.addVertices, 1),
+            (self.addEdges, 1),
             (self.copySubset, 5),
             (self.splitEdge, 5),
             (self.addFriend, 5),
             (self.moveEdge, 5),
-            (self.addEdge, 100),
+            (self.addEdge, 30),
             (self.removeEdge, 10),
             (self.addVertex, 10),
             (self.removeVertex, 10),
-            (self.modifyVertexData, 100),
+            (self.modifyVertexData, 20),
         ]
     }
 }

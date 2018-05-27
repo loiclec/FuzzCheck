@@ -141,7 +141,7 @@ public struct UnsignedIntegerMutators <I: FixedWidthInteger & UnsignedInteger & 
     
     public func weightedMutators(for x: Mutated) -> [((inout Mutated, inout Rand) -> Bool, UInt64)] {
         return [
-            (self.special, 3),
+            //(self.special, 3),
             (self.random, 10),
             (self.nudge, 10),
         ]

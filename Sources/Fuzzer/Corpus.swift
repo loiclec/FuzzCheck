@@ -16,7 +16,7 @@ extension Optional: FuzzInput where Wrapped: FuzzInput {
     }
 }
 
-func hashToString(_ h: Int) -> String {
+public func hashToString(_ h: Int) -> String {
     let bits = UInt64(bitPattern: Int64(h))
     return String(bits, radix: 16, uppercase: false)
 }
@@ -42,7 +42,7 @@ struct Corpus <FI: FuzzInput> {
     var numAddedFeatures: Int = 0
     var numUpdatedFeatures: Int = 0
     
-    var perFeature: FixedSizeArray<(inputComplexity: Double, simplestElement: Int)> = FixedSizeArray(repeating: (0, 0), count: 1 << 21)
+    var perFeature = UnsafeMutableBufferPointer<(inputComplexity: Double, simplestElement: Int)>.allocateAndInitializeTo((0, 0), capacity: 1 << 21) // FixedSizeArray<(inputComplexity: Double, simplestElement: Int)> = FixedSizeArray(repeating: (0, 0), count: 1 << 21)
     
     var outputCorpus: String = "Corpus" // TODO
     
@@ -64,6 +64,8 @@ struct Corpus <FI: FuzzInput> {
         inputs.append(info)
         hashes.insert(unit.hash())
         
+        print(hashToString(unit.hash()))
+        
         validateFeatureSet()
         updateCumulativeWeights()
     }
@@ -71,6 +73,11 @@ struct Corpus <FI: FuzzInput> {
     mutating func updateCumulativeWeights() {
         cumulativeWeights.removeAll()
         cumulativeWeights = inputs.enumerated().scan(0, { $0 + UInt64($1.element.numFeatures) * UInt64($1.offset+1) })
+        
+        //print(cumulativeWeights)
+        //print(inputs.enumerated().map {
+        //    (UInt64($0.element.numFeatures) * UInt64($0.offset+1), $0.element.unit.map { u in hashToString(u.hash()) } ?? "nil")
+        //})
     }
     
     mutating func replace(_ inputIdx: Int, with unit: FI) {
@@ -126,7 +133,7 @@ struct Corpus <FI: FuzzInput> {
     mutating func addFeature(idx: Int, newComplexity: Double, shrink: Bool) -> Bool {
         let idx = idx % perFeature.count
 
-        let (oldComplexity, oldSmallestElementIdx) = perFeature.array[idx]
+        let (oldComplexity, oldSmallestElementIdx) = perFeature[idx]
         guard oldComplexity == 0 || (shrink && oldComplexity > newComplexity) else {
             return false
         }
@@ -140,7 +147,7 @@ struct Corpus <FI: FuzzInput> {
         }
         numUpdatedFeatures += 1
         // TODO: DEBUG
-        perFeature.array[idx] = (inputComplexity: newComplexity, simplestElement: inputs.count)
+        perFeature[idx] = (inputComplexity: newComplexity, simplestElement: inputs.count)
         
         
         
@@ -164,7 +171,7 @@ struct Corpus <FI: FuzzInput> {
     
     mutating func resetFeatureSet() {
         precondition(inputs.isEmpty)
-        perFeature.reset(to: (inputComplexity: 0, simplestElement: 0))
+        perFeature.assign(repeating: (0, 0))
     }
     
     mutating func validateFeatureSet() {

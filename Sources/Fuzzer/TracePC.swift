@@ -4,60 +4,6 @@ import Darwin
 
 typealias Feature = Int
 
-// TableOfRecentCompares (TORC) remembers the most recently performed
-// comparisons of type T.
-// We record the arguments of CMP instructions in this table unconditionally
-// because it seems cheaper this way than to compute some expensive
-// conditions inside __sanitizer_cov_trace_cmp*.
-// After the unit has been executed we may decide to use the contents of
-// this table to populate a Dictionary.
-struct TableOfRecentCompares <T> {
-    static var size: Int { return 32 } // kSizeT
-    // TODO: use sourcery to avoid using the heap
-    //       or use unsafe pointers or whatever, just make it fast
-    var table: [(T, T)?]
-    init() {
-        self.table = Array(repeating: nil, count: TableOfRecentCompares.size)
-    }
-    
-    subscript(idx: Int) -> (T, T) {
-        get {
-            return table[idx % TableOfRecentCompares.size]!
-        }
-        set {
-            table[idx % TableOfRecentCompares.size] = newValue
-        }
-    }
-}
-
-/*
-template <Int kSizeT>
-struct MemMemTable {
-  static const Int kSize = kSizeT;
-  Word MemMemWords[kSize];
-  Word EmptyWord;
-
-  void Add(const uint8_t *Data, Int Size) {
-    if (Size <= 2) return;
-    Size = std::min(Size, Word::GetMaxSize());
-    Int Idx = SimpleFastHash(Data, Size) % kSize;
-    MemMemWords[Idx].Set(Data, Size);
-  }
-  const Word &Get(Int Idx) {
-    for (Int i = 0; i < kSize; i++) {
-      const Word &W = MemMemWords[(Idx + i) % kSize];
-      if (W.size()) return W;
-    }
-    EmptyWord.Set(nullptr, 0);
-    return EmptyWord;
-  }
-};
-*/
-
-// The coverage counters and PCs.
-// These are declared as global variables named "__sancov_*" to simplify
-// experiments with inlined instrumentation.
-
 extension UnsafeMutableBufferPointer {
     static func allocateAndInitializeTo(_ x: Element, capacity: Int) -> UnsafeMutableBufferPointer {
         let b = UnsafeMutableBufferPointer.allocate(capacity: capacity)
@@ -66,9 +12,7 @@ extension UnsafeMutableBufferPointer {
     }
 }
 
-// __sancov_trace_pc_pcs
 var PCs = UnsafeMutableBufferPointer<PC>.allocateAndInitializeTo(0, capacity: TracePC.maxNumPCs)
-// __sancov_trace_pc_guard_8bit_counters
 var eightBitCounters = UnsafeMutableBufferPointer<UInt8>.allocateAndInitializeTo(0, capacity: TracePC.maxNumPCs)
 
 func counterToFeature <T: BinaryInteger> (_ counter: T) -> CUnsignedInt {
@@ -84,17 +28,7 @@ func counterToFeature <T: BinaryInteger> (_ counter: T) -> CUnsignedInt {
     return 0
 }
 
-struct PCTableEntry {
-    let pc: PC
-    let flags: UInt;
-}
-
 typealias PC = UInt
-extension PC {
-    var positive: Bool {
-        return self > 0
-    }
-}
 
 final class TracePC {
     // How many bits of PC are used from __sanitizer_cov_trace_pc
@@ -104,28 +38,10 @@ final class TracePC {
     var numGuards: Int = 0
     var modules: [UnsafeMutableBufferPointer<UInt32>] = []
     
-    var modulePCTables: [UnsafeMutableBufferPointer<PCTableEntry>] = []
-    var numPCInPCTables: Int = 0
-    
-    var numInline8bitCounters: Int = 0
-    var numModulesWithInline8BitCounters: Int = 0
-    
     var valueProfileMap: ValueBitMap = .init()
     
-    var observedPCs: Set<PC> = []
-    var observedFuncs: Set<PC> = []
-    
-    var useCounters: Bool = false
-    var useValueProfile: Bool = false
-    var printNewPCs: Bool = false
-    var printNewFuncs: Int = 0
-    
-    var moduleCounters: [UnsafeMutableBufferPointer<UInt8>] = []
-    
-    var torc4: TableOfRecentCompares<UInt32> = .init()
-    var torc8: TableOfRecentCompares<UInt64> = .init()
-    // let torcW: TableOfRecentCompares<CUnsignedInt>
-    // MemMemTable<1024> MMT;
+    var useCounters: Bool = true
+    var useValueProfile: Bool = true
     
     init() {}
     
@@ -153,34 +69,8 @@ final class TracePC {
             buffer[i] = UInt32(numGuards % TracePC.maxNumPCs)
         }
         modules.append(buffer)
-        
-        /*
-if (Start == Stop || *Start) return;
-  assert(NumModules < sizeof(Modules) / sizeof(Modules[0]));
-  for (uint32_t *P = Start; P < Stop; P++) {
-    NumGuards++;
-    if (NumGuards == kNumPCs) {
-      RawPrint(
-          "WARNING: The binary has too many instrumented PCs.\n"
-          "         You may want to reduce the size of the binary\n"
-          "         for more efficient fuzzing and precise coverage data\n");
     }
-    *P = NumGuards % kNumPCs;
-  }
-  Modules[NumModules].Start = Start;
-  Modules[NumModules].Stop = Stop;
-  NumModules++;
-         */
-    }
-    
-    func handlePCsInit(start: UnsafeMutablePointer<PCTableEntry>, stop: UnsafeMutablePointer<PCTableEntry>) {
-        guard let l = modulePCTables.last, l.baseAddress != start else { return }
-        // precondition
-        let buffer = UnsafeMutableBufferPointer(start: start, count: stop - start)
-        modulePCTables.append(buffer)
-        numPCInPCTables += buffer.count
-    }
-    
+
     func handleCallerCallee(caller: UInt, callee: UInt) {
         let bits: UInt = 12
         let mask = (1 << bits) - 1
@@ -189,53 +79,7 @@ if (Start == Stop || *Start) return;
     }
     
     func getTotalPCCoverage() -> Int {
-        guard !observedPCs.isEmpty else {
-            return (1 ..< numPCs()).reduce(0) { $0 + (PCs[$1].positive ? 1 : 0) }
-        }
-        return observedPCs.count
-    }
-    
-    func updateObservedPCs() {
-        var coveredFuncs: [PC] = []
-        
-        func observePC(_ pc: PC) {
-            if observedPCs.insert(pc).inserted, printNewPCs {
-                print("\tNEW_PC: TODO")// TODO
-            }
-        }
-        
-        func observe(_ TE: PCTableEntry) {
-            if TE.flags & 1 != 0, observedFuncs.insert(TE.pc).inserted, printNewFuncs != 0 {
-                coveredFuncs.append(TE.pc)
-            }
-            observePC(TE.pc)
-        }
-        
-        if numPCInPCTables != 0 {
-            if numInline8bitCounters == numPCInPCTables {
-                for i in 0 ..< numModulesWithInline8BitCounters {
-                    precondition(moduleCounters[i].count == modulePCTables[i].count)
-                    for j in moduleCounters[i].indices where moduleCounters[i][j] > 0 {
-                        observe(modulePCTables[i][j])
-                    }
-                }
-            }
-        } else if numGuards == numPCInPCTables {
-            var guardIdx = 1
-            for i in modules.indices {
-                for j in modules[i].indices {
-                    guardIdx += 1
-                    if eightBitCounters[guardIdx] != 0 {
-                        observe(modulePCTables[i][j])
-                    }
-                }
-            }
-        }
-        // skip clang counters parts
-        for _ in 0 ..< min(coveredFuncs.count, printNewFuncs) {
-            // print
-            // TODO
-        }
+        return (1 ..< numPCs()).reduce(0) { $0 + ((PCs[$1] != 0) ? 1 : 0) }
     }
     
     func collectFeatures(_ handleFeature: (Feature) -> Void) {
@@ -243,144 +87,37 @@ if (Start == Stop || *Start) return;
         let N = numPCs()
         
         func handle8BitCounter(_ handleFeature: (Feature) -> Void, _ firstFeature: Feature, _ idx: Int, _ counter: UInt8) -> Void {
-            handleFeature(firstFeature + idx/* * 8*/ + Int(counterToFeature(counter)))
+            handleFeature(firstFeature + idx * 8 + Int(counterToFeature(counter)))
         }
         
         var firstFeature: Feature = 0
-        if numInline8bitCounters == 0 {
-            for i in 0 ..< N where Counters[i] != 0 {
-                handle8BitCounter(handleFeature, firstFeature, i, Counters[i])
-            }
-            firstFeature += N/* * 8*/
+        
+        for i in 0 ..< N where Counters[i] != 0 {
+            handle8BitCounter(handleFeature, firstFeature, i, Counters[i])
         }
-        else {
-            var x = 0
-            for i in 0 ..< numModulesWithInline8BitCounters {
-                for j in moduleCounters[i].indices where moduleCounters[i][j] != 0 {
-                    x += 1
-                    handle8BitCounter(handleFeature, firstFeature, j, moduleCounters[i][j])
-                }
-            }
-            print(x)
-        }
-        // omit clang counters
-        // omit extra counters
+        firstFeature += N * 8
+    
         if useValueProfile {
             valueProfileMap.forEach {
                 handleFeature(firstFeature + $0)
             }
             firstFeature += Feature(type(of: valueProfileMap).mapSizeInBits)
         }
-        
-        // omit lowest stack thingy
     }
     
-    /*
-void TracePC::CollectFeatures(Callback HandleFeature) const {
-  uint8_t *Counters = this->Counters();
-  Int N = GetNumPCs();
-  auto Handle8bitCounter = [&](Int FirstFeature,
-                               Int Idx, uint8_t Counter) {
-    HandleFeature(FirstFeature + Idx * 8 + CounterToFeature(Counter));
-  };
-
-  Int FirstFeature = 0;
-
-  if (!NumInline8bitCounters) {
-    ForEachNonZeroByte(Counters, Counters + N, FirstFeature, Handle8bitCounter);
-    FirstFeature += N * 8;
-  }
-
-  if (NumInline8bitCounters) {
-    for (Int i = 0; i < NumModulesWithInline8bitCounters; i++) {
-      ForEachNonZeroByte(ModuleCounters[i].Start, ModuleCounters[i].Stop,
-                         FirstFeature, Handle8bitCounter);
-      FirstFeature += 8 * (ModuleCounters[i].Stop - ModuleCounters[i].Start);
-    }
-  }
-
-  if (Int NumClangCounters = ClangCountersEnd() - ClangCountersBegin()) {
-    auto P = ClangCountersBegin();
-    for (Int Idx = 0; Idx < NumClangCounters; Idx++)
-      if (auto Cnt = P[Idx])
-        HandleFeature(FirstFeature + Idx * 8 + CounterToFeature(Cnt));
-    FirstFeature += NumClangCounters;
-  }
-
-  ForEachNonZeroByte(ExtraCountersBegin(), ExtraCountersEnd(), FirstFeature,
-                     Handle8bitCounter);
-  FirstFeature += (ExtraCountersEnd() - ExtraCountersBegin()) * 8;
-
-  if (UseValueProfile) {
-    ValueProfileMap.ForEach([&](Int Idx) {
-      HandleFeature(FirstFeature + Idx);
-    });
-    FirstFeature += ValueProfileMap.SizeInBits();
-  }
-
-  if (auto MaxStackOffset = GetMaxStackOffset())
-    HandleFeature(FirstFeature + MaxStackOffset);
-}
-
-     */
-    
-    func handleInline8BitCountersInit(start: UnsafeMutablePointer<UInt8>, stop: UnsafeMutablePointer<UInt8>) {
-        guard start != stop else { return }
-        guard !(numModulesWithInline8BitCounters != 0 && moduleCounters.last!.baseAddress == start) else {
-            return
-        }
-        precondition(numModulesWithInline8BitCounters < moduleCounters.count)
-        let buffer = UnsafeMutableBufferPointer(start: start, count: stop - start)
-        moduleCounters[numModulesWithInline8BitCounters] = buffer
-        numInline8bitCounters += buffer.count
-    }
-
     func handleCmp <T: BinaryInteger> (pc: PC, arg1: T, arg2: T) {
         let argxor = arg1 ^ arg2
         let argdist = UInt(__popcountll(UInt64(argxor)) + 1)
 
         let idx = ((pc & 4095) + 1) &* argdist
-        if let (arg1, arg2) = (arg1, arg2) as? (UInt32, UInt32) {
-            torc4[numericCast(argxor)] = (arg1, arg2)
-        } else if let (arg1, arg2) = (arg1, arg2) as? (UInt64, UInt64) {
-            torc8[numericCast(argxor % (T(Int.max)))] = (arg1, arg2)
-        }
         _ = valueProfileMap.addValue(idx)
     }
     
     func resetMaps() {
         valueProfileMap.reset()
         modules.removeAll()
-        clearInlineCounters()
         eightBitCounters.assign(repeating: 0)
-        // clear extra and clang counters
     }
-    
-    func clearInlineCounters() {
-        for module in moduleCounters {
-            module.assign(repeating: 0)
-        }
-    }
-    
-    // record initial stack
-    // stack offset
-    // for each observed pcs
-    // initial stack
-    // what is linker-initialized data
-
-    // update feature set is not defined??
-    /*
-    mutating func addValueForMemcmp(caller: PC, x: UInt8, y: UInt8, n: Int, stopAtZero: Bool) {
-        
-        guard n != 0 else { return }
-
-        // A: create 64 bytes trivial value
-        // B: same as A
-        
-        // TODO
-    }
-    */
-    // for each non zero byte
 }
 
 struct ValueBitMap {
@@ -428,7 +165,6 @@ struct ValueBitMap {
                 guard M & (UInt(1) << j) != 0 else { continue }
                 f(Int(i) * MemoryLayout<UInt>.size * 8 + j)
             }
-            
         }
     }
 }

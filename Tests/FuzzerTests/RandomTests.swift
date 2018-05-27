@@ -14,7 +14,6 @@ class FuzzerTests: XCTestCase {
         print(weights)
         print(cumulativeWeights)
         
-        
         measure {
             var timesChosen = weights.map { _ in 0 }
             for i in 0 ..< 10_000 {

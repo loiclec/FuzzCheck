@@ -244,26 +244,30 @@ struct FT : FuzzTarget {
         return 0
         */
         if
-         g.count == 6,
-         g.graph[0].data == 0x64,
-         g.graph[1].data == 0x65,
-         g.graph[2].data == 0x61,
-         g.graph[3].data == 0x64,
-         g.graph[4].data == 0x62,
-         g.graph[5].data == 0x65,
-         g.graph[0].edges.count > 0,
-         g.graph[0].edges[0] == 1,
-         g.graph[0].edges.count > 1,
-         g.graph[0].edges[1] == 2,
-         g.graph[1].edges.count > 0,
-         g.graph[1].edges[0] == 3,
-         g.graph[1].edges.count > 1,
-         g.graph[1].edges[1] == 4,
-         g.graph[2].edges.count > 0,
-         g.graph[2].edges[0] == 5,
-         g.graph[3].edges.count == 0,
-         g.graph[4].edges.count == 0,
-         g.graph[5].edges.count == 0
+            g.count == 8,
+            g.graph[0].data == 0x64,
+            g.graph[1].data == 0x65,
+            g.graph[2].data == 0x61,
+            g.graph[3].data == 0x64,
+            g.graph[4].data == 0x62,
+            g.graph[5].data == 0x65,
+            g.graph[6].data == 0x65,
+            g.graph[7].data == 0x67,
+            g.graph[0].edges.count == 2,
+            g.graph[0].edges[0] == 1,
+            g.graph[0].edges[1] == 2,
+            g.graph[1].edges.count == 2,
+            g.graph[1].edges[0] == 3,
+            g.graph[1].edges[1] == 4,
+            case () = print(",", terminator: ""),
+            g.graph[2].edges.count == 2,
+            g.graph[2].edges[0] == 5,
+            g.graph[2].edges[1] == 6,
+            case () = print("|", terminator: ""),
+            g.graph[3].edges.count == 1,
+            g.graph[3].edges[0] == 7,
+            g.graph[4].edges.count == 0,
+            g.graph[5].edges.count == 0
         {
             fatalError()
         }
@@ -273,7 +277,7 @@ struct FT : FuzzTarget {
 
 let graphMutators = GraphMutators(vertexMutators: UnsignedIntegerMutators<UInt8>(), initializeVertex: { r in r.byte() })
 
-let fuzzer = Fuzzer(mutators: graphMutators, fuzzTarget: FT())
+let fuzzer = Fuzzer(mutators: graphMutators, fuzzTarget: FT(), seed: CommandLine.arguments.count > 1 ? UInt32(time(nil)) : UInt32(CommandLine.arguments[1])! )
 
 fuzzer.loop(["Corpus"])
 

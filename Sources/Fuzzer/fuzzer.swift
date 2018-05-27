@@ -3,7 +3,7 @@ import Darwin
 import Foundation
 
 public final class Fuzzer <F: FuzzTarget, M: Mutators> where M.Mutated == F.Input {
-    var rand: Rand = Rand(seed: 0)
+    var rand: Rand
 
     var corpus: Corpus<F.Input> = Corpus()
     var currentUnit: F.Input?
@@ -13,8 +13,8 @@ public final class Fuzzer <F: FuzzTarget, M: Mutators> where M.Mutated == F.Inpu
     var lastCorpusUpdateRun: Int = 0
     var lastCorpusUpdateTime: clock_t = 0
     
-    let mutateDepth: Int = 20
-    let maxNumberOfRuns: Int = 1_000_000
+    let mutateDepth: Int = 3
+    let maxNumberOfRuns: Int = 10_000_000
     let maxComplexity: Double? = nil
     let minDefaultComplexity: Double = 256
     let shuffleAtStartup: Bool = false
@@ -39,9 +39,11 @@ public final class Fuzzer <F: FuzzTarget, M: Mutators> where M.Mutated == F.Inpu
     let shrink: Bool = true
     let reduceInputs: Bool = true
     
-    public init(mutators: M, fuzzTarget: F) {
+    public init(mutators: M, fuzzTarget: F, seed: UInt32) {
+        print("Seed: \(seed)")
         self.mutators = mutators
         self.fuzzTarget = fuzzTarget
+        self.rand = Rand.init(seed: seed)
         coordinator._send = self.receive
         setSignalHandler(timeout: timeout)
     }
@@ -56,10 +58,8 @@ extension Fuzzer {
         var foundUniqueFeaturesOfII = 0
         let numUpdatesBefore = corpus.numUpdatedFeatures
         
-        var allCollectedFeatures: Set<Feature> = []
         
         TPC.collectFeatures { feature in
-            allCollectedFeatures.insert(feature)
             if corpus.addFeature(idx: feature, newComplexity: u.complexity(), shrink: shrink) {
                 uniqueFeaturesSetTmp.insert(feature)
             }
@@ -71,7 +71,7 @@ extension Fuzzer {
         
         let numNewFeatures = corpus.numUpdatedFeatures - numUpdatesBefore
         guard numNewFeatures == 0 else {
-            TPC.updateObservedPCs()
+            //TPC.updateObservedPCs()
             corpus.addToCorpus(unit: u, numFeatures: numNewFeatures, mayDeleteFile: mayDeleteFile, featureSet: Array(uniqueFeaturesSetTmp))
             return true
         }
@@ -283,8 +283,6 @@ extension Fuzzer {
         printStats("START", "")
         readAndExecuteCorpora(dirs)
         printStats("", "")
-        TPC.printNewPCs = true // TODO
-        TPC.printNewFuncs = 0 // TODO
         // TODO: last corpus reload
         while true {
             // TODO: reload interval sec reload

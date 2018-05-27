@@ -68,13 +68,16 @@ extension Rand {
     public mutating func weightedPickIndex <W: RandomAccessCollection> (cumulativeWeights: W) -> W.Index where W.Element: FixedWidthInteger & UnsignedInteger {
        
         let randWeight: W.Element = integer(inside: 0 ..< (cumulativeWeights.last ?? 0))
-        
+        /*
         switch cumulativeWeights.binarySearch(compare: { $0.compare(randWeight) }) {
         case .success(let i):
             return i
         case .failure(let start, _):
             return min(cumulativeWeights.index(before: cumulativeWeights.endIndex), start)
-        }
+        }*/
+        //let randWeight = (self.integer(inside: 0 ..< cumulativeWeights.last!)) + 1
+        let i = cumulativeWeights.index(where: { $0 > randWeight })!
+        return i
     }
     
     public mutating func weightedPickIndex <T, C: RandomAccessCollection> (from c: C) -> C.Index where C.Element == (T, UInt64), C.Index == Int {
@@ -93,7 +96,7 @@ extension Rand {
          */
         let accumulatedWeights = c.scan(0, { $0 + $1.1 })
         let randWeight = (self.uint64() % accumulatedWeights.last!) + 1
-        let i = accumulatedWeights.index(where: { $0 >= randWeight })!
+        let i = accumulatedWeights.index(where: { $0 > randWeight })!
         return i
     }
     public mutating func weightedPick <T, C: RandomAccessCollection> (from c: C) -> T where C.Element == (T, UInt64), C.Index == Int {
@@ -141,7 +144,7 @@ extension Rand {
 }
 
 extension Sequence {
-    func scan <T> (_ initial: T, _ acc: (T, Element) -> T) -> [T] {
+    public func scan <T> (_ initial: T, _ acc: (T, Element) -> T) -> [T] {
         var results: [T] = []
         var t = initial
         for x in self {

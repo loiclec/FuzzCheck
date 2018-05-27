@@ -49,7 +49,13 @@ extension Graph: FuzzInput where V: FuzzInput, V: Hashable {
     }
     
     public func hash() -> Int {
-        return reduce(1.hashValue) { ((($0 &* 65371) ^ $1.data.hash()) &* 65371) ^ $1.edges.hash() }
+        var h = Hasher.init()
+        h.combine(1)
+        h = reduce(into: h) { (h: inout Hasher, v: Vertex) in
+            h.combine(v.data)
+            h.combine(v.edges)
+        }
+        return h.finalize()
     }
 }
 
@@ -166,7 +172,7 @@ public struct GraphMutators <VM: Mutators> : Mutators where VM.Mutated: Hashable
             (self.splitEdge, 5),
             (self.addFriend, 5),
             (self.moveEdge, 5),
-            (self.addEdge, 10),
+            (self.addEdge, 100),
             (self.removeEdge, 10),
             (self.addVertex, 10),
             (self.removeVertex, 10),

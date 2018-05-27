@@ -1,7 +1,14 @@
 import Foundation
 import Fuzzer
-//import ModuleToTest
-//import ModuleToTestMutators
+import ModuleToTest
+import ModuleToTestMutators
+
+extension UInt8: FuzzInput {
+    
+}
+
+
+
 /*
 struct Pair: Codable {
     var a: Int
@@ -144,18 +151,22 @@ fuzzer.loop(["Corpus"])
 */
 
 struct FT : FuzzTarget {
-    typealias Input = IntWrapper
+    typealias Input = Graph<UInt8>
     
     static func baseInput() -> Input {
-        return IntWrapper.init(x: 0)
+        return Graph.init()
     }
     
     func newInput(_ r: inout Rand) -> Input {
-        return IntWrapper.init(x: r.int())
+        var g = Graph<UInt8>.init()
+        for _ in 0 ..< r.positiveInt(10) {
+            _ = graphMutators.mutate(&g, &r)
+        }
+        return g
     }
     
     func run(_ g: Input) -> Int {
-
+        /*
         if
             g.x < 500,
             g.x > 0,
@@ -231,8 +242,8 @@ struct FT : FuzzTarget {
         }
 
         return 0
-        /*
-         if
+        */
+        if
          g.count == 6,
          g.graph[0].data == 0x64,
          g.graph[1].data == 0x65,
@@ -240,28 +251,35 @@ struct FT : FuzzTarget {
          g.graph[3].data == 0x64,
          g.graph[4].data == 0x62,
          g.graph[5].data == 0x65,
-         case () = print("done"),
-         g.graph[0].edges.count == 2,
+         g.graph[0].edges.count > 0,
          g.graph[0].edges[0] == 1,
+         g.graph[0].edges.count > 1,
          g.graph[0].edges[1] == 2,
-         g.graph[1].edges.count == 2,
+         g.graph[1].edges.count > 0,
          g.graph[1].edges[0] == 3,
+         g.graph[1].edges.count > 1,
          g.graph[1].edges[1] == 4,
-         g.graph[2].edges.count == 1,
+         g.graph[2].edges.count > 0,
          g.graph[2].edges[0] == 5,
          g.graph[3].edges.count == 0,
          g.graph[4].edges.count == 0,
          g.graph[5].edges.count == 0
-         {
-         fatalError()
-         }*/
-        //return 0
+        {
+            fatalError()
+        }
+        return 0
     }
 }
 
-// let graphMutators = GraphMutators(vertexMutators: UnsignedIntegerMutators<UInt8>(), initializeVertex: { r in r.byte() })
+let graphMutators = GraphMutators(vertexMutators: UnsignedIntegerMutators<UInt8>(), initializeVertex: { r in r.byte() })
 
-let fuzzer = Fuzzer(mutators: IntWrapperMutators(), fuzzTarget: FT())
+let fuzzer = Fuzzer(mutators: graphMutators, fuzzTarget: FT())
 
 fuzzer.loop(["Corpus"])
+
+
+
+
+
+
 

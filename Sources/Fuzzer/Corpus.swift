@@ -64,8 +64,13 @@ struct Corpus <FI: FuzzInput> {
         inputs.append(info)
         hashes.insert(unit.hash())
         
-        cumulativeWeights.append((cumulativeWeights.last ?? 0) + UInt64(info.numFeatures) * UInt64(cumulativeWeights.count))
         validateFeatureSet()
+        updateCumulativeWeights()
+    }
+    
+    mutating func updateCumulativeWeights() {
+        cumulativeWeights.removeAll()
+        cumulativeWeights = inputs.enumerated().scan(0, { $0 + UInt64($1.element.numFeatures) * UInt64($1.offset+1) })
     }
     
     mutating func replace(_ inputIdx: Int, with unit: FI) {
@@ -87,9 +92,8 @@ struct Corpus <FI: FuzzInput> {
         return hashes.contains(u.hash())
     }
     
-    func chooseUnitIdxToMutate(_ r: inout Rand) -> Int {
+    mutating func chooseUnitIdxToMutate(_ r: inout Rand) -> Int {
         let x = r.weightedPickIndex(cumulativeWeights: cumulativeWeights)
-        // print(inputs.indices.map { (cumulativeWeights[$0], inputs[$0].unit.map { "\($0)" } ?? "nil") } )
         return x
         //return r.weightedPickIndex(cumulativeWeights: cumulativeWeights)
     }
@@ -137,34 +141,12 @@ struct Corpus <FI: FuzzInput> {
         numUpdatedFeatures += 1
         // TODO: DEBUG
         perFeature.array[idx] = (inputComplexity: newComplexity, simplestElement: inputs.count)
+        
+        
+        
         return true
     }
-    /*
-  bool AddFeature(size_t Idx, uint32_t NewSize, bool Shrink) {
-    assert(NewSize);
-    Idx = Idx % kFeatureSetSize;
-    uint32_t OldSize = GetFeature(Idx);
-    if (OldSize == 0 || (Shrink && OldSize > NewSize)) {
-      if (OldSize > 0) {
-        size_t OldIdx = SmallestElementPerFeature[Idx];
-        InputInfo &II = *Inputs[OldIdx];
-        assert(II.NumFeatures > 0);
-        II.NumFeatures--;
-        if (II.NumFeatures == 0)
-          DeleteInput(OldIdx);
-      } else {
-        NumAddedFeatures++;
-      }
-      NumUpdatedFeatures++;
-      if (FeatureDebug)
-        Printf("ADD FEATURE %zd sz %d\n", Idx, NewSize);
-      SmallestElementPerFeature[Idx] = Inputs.size();
-      InputSizesPerFeature[Idx] = NewSize;
-      return true;
-    }
-    return false;
-  }
-    */
+
     mutating func deleteFile(input: InputInfo) {
         guard !outputCorpus.isEmpty, input.mayDeleteFile else { return }
         let path = "\(outputCorpus)/\(hashToString(input.unit.hash()))" // TODO: more robust solution

@@ -6,17 +6,22 @@ class FuzzerTests: XCTestCase {
     
     func testWeightedPick() {
         var r = Rand.init(seed: 0)
-        var weights: [(UInt8, UInt64)] = Array.init()
-        for i in 0 ..< 1_000 {
-            weights.append((0, UInt64(i * 5)))
+        var weights: [UInt64] = Array.init()
+        for i in 0 ..< 10 {
+            weights.append(UInt64(i))
         }
+        let cumulativeWeights = weights.scan(0, { $0 + $1 })
+        print(weights)
+        print(cumulativeWeights)
+        
         
         measure {
             var timesChosen = weights.map { _ in 0 }
-            for i in 0 ..< 100000 {
-                timesChosen[r.weightedPickIndex(from: weights)] += 1
+            for i in 0 ..< 10_000 {
+                
+                timesChosen[r.weightedPickIndex(cumulativeWeights: cumulativeWeights)] += 1
             }
-           print(timesChosen[2])
+           print(timesChosen)
         }
     }
     

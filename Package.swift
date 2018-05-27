@@ -13,9 +13,9 @@ let package = Package(
     targets: [
         .target(name: "CBuiltinsNotAvailableInSwift", dependencies: []),
         .target(name: "Fuzzer", dependencies: ["CBuiltinsNotAvailableInSwift"]),
-        //.target(name: "ModuleToTest", dependencies: []),
-        //.target(name: "ModuleToTestMutators", dependencies: ["Fuzzer", "ModuleToTest"]),
-        .target(name: "ToTest", dependencies: ["Fuzzer"/*, "ModuleToTest", "ModuleToTestMutators"*/]),
+        .target(name: "ModuleToTest", dependencies: []),
+        .target(name: "ModuleToTestMutators", dependencies: ["Fuzzer", "ModuleToTest"]),
+        .target(name: "ToTest", dependencies: ["Fuzzer", "ModuleToTest", "ModuleToTestMutators"]),
 
         .testTarget(name: "FuzzerTests", dependencies: ["Fuzzer"])
     ]

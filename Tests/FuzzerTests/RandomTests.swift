@@ -16,7 +16,7 @@ class FuzzerTests: XCTestCase {
         
         measure {
             var timesChosen = weights.map { _ in 0 }
-            for i in 0 ..< 10_000 {
+            for _ in 0 ..< 10_000 {
                 
                 timesChosen[r.weightedPickIndex(cumulativeWeights: cumulativeWeights)] += 1
             }

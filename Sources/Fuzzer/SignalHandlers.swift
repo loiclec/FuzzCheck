@@ -27,8 +27,8 @@ func setTimer(microseconds: Int32) {
     setSigAction(SIGALRM, alarmHandler)
 }
 
-func setSignalHandler(timeout: Int) {
-    setTimer(microseconds: Int32(timeout))
+func setSignalHandler(timeout: Int32) {
+    setTimer(microseconds: timeout)
     setSigAction(SIGSEGV, crashHandler)
     setSigAction(SIGBUS, crashHandler)
     setSigAction(SIGABRT, crashHandler)

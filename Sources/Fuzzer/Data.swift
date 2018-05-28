@@ -25,7 +25,7 @@ struct Feature {
     }
 }
 
-extension Feature.Key: Hashable {
+extension Feature.Key: Hashable, Comparable {
     var hashValue: Int {
         return k.hashValue
     }
@@ -48,8 +48,9 @@ extension Feature.Key: Strideable {
 
 extension Feature.Coverage {
 
-    struct Score {
+    struct Score: CustomStringConvertible {
         var s: Int
+        var description: String { return s.description }
     }
 
     var importance: Score {
@@ -66,13 +67,13 @@ extension Feature.Coverage {
     }
 }
 
-typealias FeatureDictionary = UnsafeMutableBufferPointer<(Complexity, CorpusIndex)>
+typealias FeatureDictionary = UnsafeMutableBufferPointer<(Complexity, CorpusIndex?)>
 
-extension UnsafeMutableBufferPointer where Element == (Complexity, CorpusIndex) {
+extension UnsafeMutableBufferPointer where Element == (Complexity, CorpusIndex?) {
     static func createEmpty() -> UnsafeMutableBufferPointer {
-        return UnsafeMutableBufferPointer.allocateAndInitializeTo((.zero, .null), capacity: 1 << 21)
+        return UnsafeMutableBufferPointer.allocateAndInitializeTo((.zero, nil), capacity: 1 << 21)
     }
-    subscript(idx: Feature.Key) -> (Complexity, CorpusIndex) {
+    subscript(idx: Feature.Key) -> (Complexity, CorpusIndex?) {
         get {
             return self[idx.k % count]
         }

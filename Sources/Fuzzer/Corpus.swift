@@ -21,9 +21,8 @@ public func hashToString(_ h: Int) -> String {
     return String(bits, radix: 16, uppercase: false)
 }
 
-enum CorpusIndex {
-    case null
-    case idx(Int)
+struct CorpusIndex: Equatable {
+    var value: Int
 }
 
 struct Corpus <FI: FuzzInput> {
@@ -104,9 +103,9 @@ struct Corpus <FI: FuzzInput> {
         return hashes.contains(u.hash())
     }
     
-    mutating func chooseUnitIdxToMutate(_ r: inout Rand) -> Int {
+    mutating func chooseUnitIdxToMutate(_ r: inout Rand) -> CorpusIndex {
         let x = r.weightedPickIndex(cumulativeWeights: cumulativeWeights)
-        return x
+        return CorpusIndex.init(value: x)
         //return r.weightedPickIndex(cumulativeWeights: cumulativeWeights)
     }
     
@@ -123,7 +122,7 @@ struct Corpus <FI: FuzzInput> {
         }
     }
     func printFeatureSet() {
-        for case (let i, (.magnitudeOf(let complexity), let simplestElement)) in zip(inputInfoForFeature.indices, inputInfoForFeature) {
+        for case (let i, (.magnitudeOf(let complexity), let simplestElement?)) in zip(inputInfoForFeature.indices, inputInfoForFeature) {
             print("[\(i): id \(simplestElement) complexity: \(complexity)]")
         }
         print()
@@ -153,9 +152,9 @@ struct Corpus <FI: FuzzInput> {
         
         let covScore = feature.coverage.importance
         
-        if case .idx(let oldSmallestElementIdx) = oldSmallestElementIdx {
-            inputs[oldSmallestElementIdx].coverageScore.s -= covScore.s
-            if inputs[oldSmallestElementIdx].coverageScore.s == 0 {
+        if let oldSmallestElementIdx = oldSmallestElementIdx {
+            inputs[oldSmallestElementIdx.value].coverageScore.s -= covScore.s
+            if inputs[oldSmallestElementIdx.value].coverageScore.s == 0 {
                 deleteInput(oldSmallestElementIdx)
             }
         } else {
@@ -163,7 +162,7 @@ struct Corpus <FI: FuzzInput> {
         }
         updatedCoverageScore.s += covScore.s
         
-        inputInfoForFeature[feature.key] = (inputComplexity: .magnitudeOf(newComplexity), simplestElement: .idx(inputs.count))
+        inputInfoForFeature[feature.key] = (inputComplexity: .magnitudeOf(newComplexity), simplestElement: CorpusIndex(value: inputs.count))
         
         return true
     }
@@ -175,16 +174,16 @@ struct Corpus <FI: FuzzInput> {
 
     }
 
-    mutating func deleteInput(_ idx: Int) {
-        let input = inputs[idx]
+    mutating func deleteInput(_ idx: CorpusIndex) {
+        let input = inputs[idx.value]
         deleteFile(input: input)
-        inputs[idx].unit = nil
+        inputs[idx.value].unit = nil
         // if debug only
         // print("EVICTED \(idx)")
     }
     
     mutating func resetFeatureSet() {
         precondition(inputs.isEmpty)
-        inputInfoForFeature.assign(repeating: (.zero, .null))
+        inputInfoForFeature.assign(repeating: (.zero, nil))
     }
 }

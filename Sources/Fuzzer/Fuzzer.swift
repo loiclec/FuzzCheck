@@ -150,6 +150,13 @@ extension Fuzzer {
                 print(e)
             }
         }
+        static func deleteFile(unitInfo: Corpus.UnitInfo) {
+            let outputCorpus = "Corpus" // TODO
+            guard !outputCorpus.isEmpty, unitInfo.mayDeleteFile else { return }
+            let path = "\(outputCorpus)/\(hashToString(unitInfo.unit.hash()))" // TODO: more robust solution
+            unlink(path)
+        }
+        
         static func dumpUnit(prefix: String, reason: StopReason, unit: FT.Unit) {
             // print mutation sequence
             print("Base unit: \(hashToString(unit.hash()))")

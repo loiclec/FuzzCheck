@@ -45,8 +45,6 @@ extension Fuzzer {
         var updatedCoverageScore: Feature.Coverage.Score = .init(s: 0)
         
         var unitInfoForFeature = FeatureDictionary.createEmpty()
-        
-        var outputCorpus: String = "Corpus" // TODO
     }
 }
 
@@ -62,8 +60,6 @@ extension Fuzzer.Corpus {
         )
         units.append(info)
         hashes.insert(unit.hash())
-        
-        print(hashToString(unit.hash()))
         
         updateCumulativeWeights()
     }
@@ -82,7 +78,7 @@ extension Fuzzer.Corpus {
         precondition(unit.complexity() < oldUnitInfo.unit.complexity())
         hashes.remove(oldUnitInfo.unit.hash())
         
-        deleteFile(unitInfo: units[unitIndex.value])
+        Fuzzer.Effect.deleteFile(unitInfo: units[unitIndex.value])
         
         hashes.insert(unit.hash())
         oldUnitInfo.unit = unit
@@ -97,31 +93,11 @@ extension Fuzzer.Corpus {
     
     mutating func chooseUnitIdxToMutate(_ r: inout Rand) -> CorpusIndex {
         let x = r.weightedPickIndex(cumulativeWeights: cumulativeWeights)
-        return CorpusIndex.init(value: x)
-        //return r.weightedPickIndex(cumulativeWeights: cumulativeWeights)
+        return CorpusIndex(value: x)
     }
     
     func numActiveUnits() -> Int {
         return units.reduce(0) { $0 + ($1.unit != nil ? 1 : 0) }
-    }
-    
-    func printStats() {
-        for (x, i) in zip(units, units.indices) {
-            print(
-            """
-                [\(i) \(hashToString(x.unit.hash()))] complexity: \(x.unit.complexity())
-            """)
-        }
-    }
-    func printFeatureSet() {
-        for case (let i, let (complexity, simplestElement)?) in zip(unitInfoForFeature.indices, unitInfoForFeature) {
-            print("[\(i): id \(simplestElement) complexity: \(complexity)]")
-        }
-        print()
-        for (x, i) in zip(units, units.indices) where x.coverageScore.s != 0 {
-            print(" \(i)=>\(x.coverageScore)")
-        }
-        print()
     }
     
     mutating func addFeature(_ feature: Feature, newComplexity: Complexity, shrink: Bool) -> Bool {
@@ -151,15 +127,9 @@ extension Fuzzer.Corpus {
         return true
     }
 
-    mutating func deleteFile(unitInfo: UnitInfo) {
-        guard !outputCorpus.isEmpty, unitInfo.mayDeleteFile else { return }
-        let path = "\(outputCorpus)/\(hashToString(unitInfo.unit.hash()))" // TODO: more robust solution
-        unlink(path)
-    }
-
     mutating func deleteUnit(_ idx: CorpusIndex) {
         let unitInfo = units[idx.value]
-        deleteFile(unitInfo: unitInfo)
+        Fuzzer.Effect.deleteFile(unitInfo: unitInfo)
         units[idx.value].unit = nil
         // if debug only
         // print("EVICTED \(idx)")

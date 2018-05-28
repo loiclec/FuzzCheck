@@ -50,30 +50,28 @@ extension Fuzzer {
 
         executeCallback(u)
 
-        var uniqueFeaturesSetTmp: Set<Feature.Key> = []
-        var foundUniqueFeaturesOfII = 0
+        var uniqueFeaturesSetTmp: [Feature.Key] = []
         let updateScoreBefore = corpus.updatedCoverageScore
         
         TPC.collectFeatures { feature in
             if corpus.addFeature(feature, newComplexity: u.complexity(), shrink: shrink) {
-                uniqueFeaturesSetTmp.insert(feature.key)
-            }
-            if reduceInputs, let iiIdx = inputInfoIdx, corpus.inputs[iiIdx].uniqueFeaturesSet.contains(feature.key) {
-                foundUniqueFeaturesOfII += 1
+                uniqueFeaturesSetTmp.append(feature.key)
             }
         }
         
         let deltaScore = Feature.Coverage.Score(s: corpus.updatedCoverageScore.s - updateScoreBefore.s)
         guard deltaScore.s == 0 else {
-            corpus.addToCorpus(unit: u, coverageScore: deltaScore, mayDeleteFile: mayDeleteFile, featureSet: Array(uniqueFeaturesSetTmp))
+            corpus.addToCorpus(unit: u, coverageScore: deltaScore, mayDeleteFile: mayDeleteFile, featureSet: uniqueFeaturesSetTmp)
             return true
         }
         
-        if let iiIdx = inputInfoIdx,
+        uniqueFeaturesSetTmp.sort()
+        
+        if  reduceInputs,
+            let iiIdx = inputInfoIdx,
             case let ii = corpus.inputs[iiIdx],
-            foundUniqueFeaturesOfII != 0,
             ii.uniqueFeaturesSet.count != 0,
-            foundUniqueFeaturesOfII == ii.uniqueFeaturesSet.count,
+            uniqueFeaturesSetTmp == ii.uniqueFeaturesSet,
             ii.unit.complexity() > u.complexity()
         {
             corpus.replace(iiIdx, with: u)

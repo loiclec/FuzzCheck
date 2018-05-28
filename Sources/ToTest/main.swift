@@ -277,7 +277,7 @@ struct FT : FuzzTarget {
 
 let graphMutators = GraphMutators(vertexMutators: UnsignedIntegerMutators<UInt8>(), initializeVertex: { r in r.byte() })
 
-let fuzzer = Fuzzer(mutators: graphMutators, fuzzTarget: FT(), seed: CommandLine.arguments.count > 1 ? UInt32(time(nil)) : UInt32(CommandLine.arguments[1])! )
+let fuzzer = Fuzzer(mutators: graphMutators, fuzzTarget: FT(), seed: CommandLine.arguments.count > 1 ? UInt32(CommandLine.arguments[1])! : UInt32(time(nil)) )
 
 fuzzer.loop(["Corpus"])
 

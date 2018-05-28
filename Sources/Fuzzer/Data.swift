@@ -5,10 +5,40 @@
 //  Created by Loïc Lecrenier on 27/05/2018.
 //
 
-public enum Complexity {
-    case zero
-    case magnitudeOf(Double)
+public struct Complexity {
+    public var value: Double
 }
+extension Complexity {
+    public init(_ v: Double) {
+        self.value = v
+    }
+}
+extension Complexity: ExpressibleByFloatLiteral {
+    public init(floatLiteral value: Double) {
+        self.value = value
+    }
+}
+extension Complexity: Hashable {}
+extension Complexity: Comparable {
+    public static func < (lhs: Complexity, rhs: Complexity) -> Bool {
+        return lhs.value < rhs.value
+    }
+    public static func <= (lhs: Complexity, rhs: Complexity) -> Bool {
+        return lhs.value <= rhs.value
+    }
+    public static func > (lhs: Complexity, rhs: Complexity) -> Bool {
+        return lhs.value > rhs.value
+    }
+    public static func >= (lhs: Complexity, rhs: Complexity) -> Bool {
+        return lhs.value >= rhs.value
+    }
+}
+extension Complexity: CustomStringConvertible {
+    public var description: String {
+        return value.description
+    }
+}
+
 
 struct Feature {
     struct Key {
@@ -59,21 +89,17 @@ extension Feature.Coverage {
             return .init(s: 1)
         case .valueProfile:
             return .init(s: 1)
-//        case .newComparison:
-//            return 10
-//        case .redundantComparison:
-//            return 1
         }
     }
 }
 
-typealias FeatureDictionary = UnsafeMutableBufferPointer<(Complexity, CorpusIndex?)>
+typealias FeatureDictionary = UnsafeMutableBufferPointer<(Complexity, CorpusIndex)?>
 
-extension UnsafeMutableBufferPointer where Element == (Complexity, CorpusIndex?) {
+extension UnsafeMutableBufferPointer where Element == (Complexity, CorpusIndex)? {
     static func createEmpty() -> UnsafeMutableBufferPointer {
-        return UnsafeMutableBufferPointer.allocateAndInitializeTo((.zero, nil), capacity: 1 << 21)
+        return UnsafeMutableBufferPointer.allocateAndInitializeTo(nil, capacity: 1 << 21)
     }
-    subscript(idx: Feature.Key) -> (Complexity, CorpusIndex?) {
+    subscript(idx: Feature.Key) -> (Complexity, CorpusIndex)? {
         get {
             return self[idx.k % count]
         }

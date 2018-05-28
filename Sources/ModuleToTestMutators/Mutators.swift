@@ -42,10 +42,10 @@ extension Graph: Codable where V: Codable {
     }
 }
 
-extension Graph: FuzzInput where V: FuzzInput, V: Hashable {
-    public func complexity() -> Double {
+extension Graph: FuzzUnit where V: FuzzUnit, V: Hashable {
+    public func complexity() -> Complexity {
         precondition(totalSize >= 0)
-        return 1 + Double(totalSize)
+        return Complexity(1 + Double(totalSize))
     }
     
     public func hash() -> Int {

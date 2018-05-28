@@ -16,7 +16,7 @@ public protocol FuzzTest {
 
 public struct Fuzzer <FT: FuzzTest> {
     
-    var corpus: Corpus<FT.Unit> = Corpus()
+    var corpus: Corpus = Corpus()
     var totalNumberOfRuns: Int = 0
     var currentUnit: FT.Unit = FT.baseUnit()
     var startTime: UInt = 0
@@ -25,12 +25,12 @@ public struct Fuzzer <FT: FuzzTest> {
     
     var numberOfNewUnitsAdded: Int = 0
     
-    var maxInputComplexity: UInt64 = 0
+    var maxUnitComplexity: UInt64 = 0
     let shuffleAtStartup: Bool = true
-    let defaultMaxInputComplexity: UInt64 = 256
+    let defaultMaxUnitComplexity: UInt64 = 256
     let mutateDepth: Int = 3
     let maxNumberOfRuns: Int = Int.max
-    let reduceInputs: Bool = true
+    let reduceUnits: Bool = true
     let shrink: Bool = true
     var coeffects: Coeffects
     let fuzzTarget: FT
@@ -263,14 +263,14 @@ extension Fuzzer {
         uniqueFeaturesSetTmp.sort()
 
         if
-            reduceInputs,
+            reduceUnits,
             case .loopIteration(mutatingUnitIndex: let uidx) = analysisKind,
-            case let unitInfo = corpus.inputs[uidx.value],
+            case let unitInfo = corpus.units[uidx.value],
             unitInfo.uniqueFeaturesSet.count != 0,
             uniqueFeaturesSetTmp == unitInfo.uniqueFeaturesSet,
             unitInfo.unit.complexity() > currentUnitComplexity
         {
-            corpus.replace(uidx.value, with: currentUnit)
+            corpus.replace(uidx, with: currentUnit)
             state = .didAnalyzeTestRun(didUpdateCorpus: true)
         }
         
@@ -282,15 +282,13 @@ extension Fuzzer {
             preconditionFailure()
         }
         let idx = corpus.chooseUnitIdxToMutate(&coeffects.rand)
-        let unit = corpus.inputs[idx.value].unit ?? fuzzTarget.newUnit(&coeffects.rand) // TODO: is this correct?
+        let unit = corpus.units[idx.value].unit ?? fuzzTarget.newUnit(&coeffects.rand) // TODO: is this correct?
         currentUnit = unit
         
         for _ in 0 ..< mutateDepth {
             guard totalNumberOfRuns < maxNumberOfRuns else { break }
             guard fuzzTarget.mutators.mutate(&currentUnit, &coeffects.rand) else { break }
             
-            corpus.inputs[idx.value].numExecutedMutations += 1
-
             state = .willRunTest
 
             runTest()
@@ -301,9 +299,8 @@ extension Fuzzer {
             guard case .didAnalyzeTestRun(let updatedCorpus) = state else { preconditionFailure() }
             
             if updatedCorpus {
-                corpus.inputs[idx.value].numSuccessfulMutations += 1
                 numberOfNewUnitsAdded += 1
-                reportStatus(corpus.inputs[idx.value].reduced ? .reduce : .new)
+                reportStatus(corpus.units[idx.value].reduced ? .reduce : .new)
                 Effect.writeToOutputCorpus(currentUnit)
             }
         }
@@ -346,8 +343,8 @@ extension Fuzzer {
         let maxUnitComplexity = complexities.reduce(0.0) { max($0, $1) }
         let minUnitComplexity = complexities.reduce(Double.greatestFiniteMagnitude) { min($0, $1) }
         
-        if maxInputComplexity == 0 {
-            maxInputComplexity = defaultMaxInputComplexity
+        if maxUnitComplexity == 0 {
+            maxUnitComplexity = defaultMaxUnitComplexity
         }
         // TODO: print
         */

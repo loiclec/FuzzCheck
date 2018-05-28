@@ -3,13 +3,13 @@ import Fuzzer
 import ModuleToTest
 import ModuleToTestMutators
 
-extension UInt8: FuzzInput { }
+extension UInt8: FuzzUnit { }
 
 struct FT : FuzzTest {
     typealias Unit = Graph<UInt8>
     typealias Mut = GraphMutators
     
-    var mutators: FT.Mut = GraphMutators.init(vertexMutators: UnsignedIntegerMutators.init(), initializeVertex: { r in r.byte() })
+    var mutators: FT.Mut = GraphMutators(vertexMutators: UnsignedIntegerMutators.init(), initializeVertex: { r in r.byte() })
     
     static func baseUnit() -> Unit {
         return Graph()
@@ -40,11 +40,9 @@ struct FT : FuzzTest {
             g.graph[1].edges.count == 2,
             g.graph[1].edges[0] == 3,
             g.graph[1].edges[1] == 4,
-            case () = print(",", terminator: ""),
             g.graph[2].edges.count == 2,
             g.graph[2].edges[0] == 5,
             g.graph[2].edges[1] == 6,
-            case () = print("|", terminator: ""),
             g.graph[3].edges.count == 1,
             g.graph[3].edges[0] == 7,
             g.graph[4].edges.count == 0,

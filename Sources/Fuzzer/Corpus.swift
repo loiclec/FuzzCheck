@@ -1,10 +1,10 @@
 
-import Foundation
+import Darwin
 
-extension Optional: FuzzInput where Wrapped: FuzzInput {
-    public func complexity() -> Double {
+extension Optional: FuzzUnit where Wrapped: FuzzUnit {
+    public func complexity() -> Complexity {
         switch self {
-        case .none: return 0
+        case .none: return 0.0
         case .some(let w): return w.complexity()
         }
     }
@@ -25,45 +25,42 @@ struct CorpusIndex: Equatable {
     var value: Int
 }
 
-struct Corpus <FI: FuzzInput> {
+extension Fuzzer {
+    struct Corpus {
+        
+        struct UnitInfo {
+            var unit: FT.Unit?
+            var coverageScore: Feature.Coverage.Score
+            var mayDeleteFile: Bool
+            var reduced: Bool
+            var uniqueFeaturesSet: [Feature.Key]
+        }
+        
+        var hashes: Set<Int> = []
+        var units: [UnitInfo] = []
+        
+        var cumulativeWeights: [UInt64] = []
+        
+        var addedCoverageScore: Feature.Coverage.Score = .init(s: 0)
+        var updatedCoverageScore: Feature.Coverage.Score = .init(s: 0)
+        
+        var unitInfoForFeature = FeatureDictionary.createEmpty()
+        
+        var outputCorpus: String = "Corpus" // TODO
+    }
+}
 
-    struct InputInfo {
-        var unit: FI?
-        var coverageScore: Feature.Coverage.Score
-        var numExecutedMutations: Int
-        var numSuccessfulMutations: Int
-        var mayDeleteFile: Bool
-        var reduced: Bool
-        var uniqueFeaturesSet: [Feature.Key]
-    }
+extension Fuzzer.Corpus {
     
-    var hashes: Set<Int> = []
-    var inputs: [InputInfo] = []
-    
-    var cumulativeWeights: [UInt64] = []
-    
-    var addedCoverageScore: Feature.Coverage.Score = .init(s: 0)
-    var updatedCoverageScore: Feature.Coverage.Score = .init(s: 0)
-    
-    var inputInfoForFeature = FeatureDictionary.createEmpty()
-    
-    var outputCorpus: String = "Corpus" // TODO
-    
-    func maxInputComplexity() -> Double {
-        return inputs.max(by: { $0.unit.complexity() < $1.unit.complexity() })?.unit.complexity() ?? 0.0
-    }
-    
-    mutating func addToCorpus(unit: FI, coverageScore: Feature.Coverage.Score, mayDeleteFile: Bool, featureSet: [Feature.Key]) {
-        let info = InputInfo.init(
+    mutating func addToCorpus(unit: FT.Unit, coverageScore: Feature.Coverage.Score, mayDeleteFile: Bool, featureSet: [Feature.Key]) {
+        let info = UnitInfo(
             unit: unit,
             coverageScore: coverageScore,
-            numExecutedMutations: 0,
-            numSuccessfulMutations: 0,
             mayDeleteFile: mayDeleteFile,
             reduced: false,
             uniqueFeaturesSet: featureSet
         )
-        inputs.append(info)
+        units.append(info)
         hashes.insert(unit.hash())
         
         print(hashToString(unit.hash()))
@@ -73,33 +70,28 @@ struct Corpus <FI: FuzzInput> {
     
     mutating func updateCumulativeWeights() {
         cumulativeWeights.removeAll()
-        cumulativeWeights = inputs.enumerated().scan(0, { (weight, next) in
-            let (offset, input) = next
-            return weight + UInt64(input.coverageScore.s) * UInt64(offset+1)
+        cumulativeWeights = units.enumerated().scan(0, { (weight, next) in
+            let (offset, unit) = next
+            return weight + UInt64(unit.coverageScore.s) * UInt64(offset+1)
         })
-        
-        //print(cumulativeWeights)
-        //print(inputs.enumerated().map {
-        //    (UInt64($0.element.numFeatures) * UInt64($0.offset+1), $0.element.unit.map { u in hashToString(u.hash()) } ?? "nil")
-        //})
     }
     
-    mutating func replace(_ inputIdx: Int, with unit: FI) {
+    mutating func replace(_ unitIndex: CorpusIndex, with unit: FT.Unit) {
         
-        var input = inputs[inputIdx]
-        precondition(unit.complexity() < input.unit.complexity())
-        hashes.remove(input.unit.hash())
+        var oldUnitInfo = units[unitIndex.value]
+        precondition(unit.complexity() < oldUnitInfo.unit.complexity())
+        hashes.remove(oldUnitInfo.unit.hash())
         
-        deleteFile(input: inputs[inputIdx])
+        deleteFile(unitInfo: units[unitIndex.value])
         
         hashes.insert(unit.hash())
-        input.unit = unit
-        input.reduced = true
+        oldUnitInfo.unit = unit
+        oldUnitInfo.reduced = true
         
-        inputs[inputIdx] = input
+        units[unitIndex.value] = oldUnitInfo
     }
     
-    func hasUnit(_ u: FI) -> Bool {
+    func hasUnit(_ u: FT.Unit) -> Bool {
         return hashes.contains(u.hash())
     }
     
@@ -110,80 +102,66 @@ struct Corpus <FI: FuzzInput> {
     }
     
     func numActiveUnits() -> Int {
-        return inputs.reduce(0) { $0 + ($1.unit != nil ? 1 : 0) }
+        return units.reduce(0) { $0 + ($1.unit != nil ? 1 : 0) }
     }
     
     func printStats() {
-        for (x, i) in zip(inputs, inputs.indices) {
+        for (x, i) in zip(units, units.indices) {
             print(
             """
-                [\(i) \(hashToString(x.unit.hash()))] complexity: \(x.unit.complexity())    executed_mutations: \(x.numExecutedMutations) successful_mutations: \(x.numSuccessfulMutations)
+                [\(i) \(hashToString(x.unit.hash()))] complexity: \(x.unit.complexity())
             """)
         }
     }
     func printFeatureSet() {
-        for case (let i, (.magnitudeOf(let complexity), let simplestElement?)) in zip(inputInfoForFeature.indices, inputInfoForFeature) {
+        for case (let i, let (complexity, simplestElement)?) in zip(unitInfoForFeature.indices, unitInfoForFeature) {
             print("[\(i): id \(simplestElement) complexity: \(complexity)]")
         }
         print()
-        for (x, i) in zip(inputs, inputs.indices) where x.coverageScore.s != 0 {
+        for (x, i) in zip(units, units.indices) where x.coverageScore.s != 0 {
             print(" \(i)=>\(x.coverageScore)")
         }
         print()
     }
-
-    var uniqueFeaturesHere: Set<Int> = []
     
-    mutating func addFeature(_ feature: Feature, newComplexity: Double, shrink: Bool) -> Bool {
+    mutating func addFeature(_ feature: Feature, newComplexity: Complexity, shrink: Bool) -> Bool {
         precondition(newComplexity != 0.0)
-        let (oldComplexity, oldSmallestElementIdx) = inputInfoForFeature[feature.key]
+        let unitInfo = unitInfoForFeature[feature.key]
         
-        if case .magnitudeOf(let oldC) = oldComplexity {
-            guard shrink && oldC > newComplexity else {
+        if case (let oldC, _)? = unitInfo {
+            guard shrink && oldC.value > newComplexity.value else {
                 return false
             }
         }
-        /*
-        guard oldComplexity == 0 || (shrink && oldComplexity > newComplexity) else {
-            return false
-        }
 
-         */
-        
         let covScore = feature.coverage.importance
         
-        if let oldSmallestElementIdx = oldSmallestElementIdx {
-            inputs[oldSmallestElementIdx.value].coverageScore.s -= covScore.s
-            if inputs[oldSmallestElementIdx.value].coverageScore.s == 0 {
-                deleteInput(oldSmallestElementIdx)
+        if case let (_, oldSmallestElementIdx)? = unitInfo {
+            units[oldSmallestElementIdx.value].coverageScore.s -= covScore.s
+            if units[oldSmallestElementIdx.value].coverageScore.s == 0 {
+                deleteUnit(oldSmallestElementIdx)
             }
         } else {
             addedCoverageScore.s += covScore.s
         }
         updatedCoverageScore.s += covScore.s
         
-        inputInfoForFeature[feature.key] = (inputComplexity: .magnitudeOf(newComplexity), simplestElement: CorpusIndex(value: inputs.count))
+        unitInfoForFeature[feature.key] = (newComplexity, CorpusIndex(value: units.count))
         
         return true
     }
 
-    mutating func deleteFile(input: InputInfo) {
-        guard !outputCorpus.isEmpty, input.mayDeleteFile else { return }
-        let path = "\(outputCorpus)/\(hashToString(input.unit.hash()))" // TODO: more robust solution
+    mutating func deleteFile(unitInfo: UnitInfo) {
+        guard !outputCorpus.isEmpty, unitInfo.mayDeleteFile else { return }
+        let path = "\(outputCorpus)/\(hashToString(unitInfo.unit.hash()))" // TODO: more robust solution
         unlink(path)
-
     }
 
-    mutating func deleteInput(_ idx: CorpusIndex) {
-        let input = inputs[idx.value]
-        deleteFile(input: input)
-        inputs[idx.value].unit = nil
+    mutating func deleteUnit(_ idx: CorpusIndex) {
+        let unitInfo = units[idx.value]
+        deleteFile(unitInfo: unitInfo)
+        units[idx.value].unit = nil
         // if debug only
         // print("EVICTED \(idx)")
-    }
-    
-    mutating func resetFeatureSet() {
-        precondition(inputs.isEmpty)
-        inputInfoForFeature.assign(repeating: (.zero, nil))
     }
 }

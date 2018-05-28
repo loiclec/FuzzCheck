@@ -1,22 +1,13 @@
 
-public protocol FuzzInput: Codable {
-    func complexity() -> Double
+public protocol FuzzUnit: Codable {
+    func complexity() -> Complexity
     func hash() -> Int
-}
-
-public protocol FuzzTarget {
-    associatedtype Input: FuzzInput
-    
-    static func baseInput() -> Input
-    func newInput(_ r: inout Rand) -> Input
-    
-    func run(_ i: Input) -> Int
 }
 
 public typealias Mutator<Mutated> = (inout Mutated, inout Rand) -> Bool
 
 public protocol Mutators {
-    associatedtype Mutated: FuzzInput
+    associatedtype Mutated: FuzzUnit
     
     func weightedMutators(for x: Mutated) -> [(Mutator<Mutated>, UInt64)]
 }
@@ -31,15 +22,15 @@ extension Mutators {
     }
 }
 
-public struct IntWrapper: FuzzInput, CustomStringConvertible {
+public struct IntWrapper: FuzzUnit, CustomStringConvertible {
     public var x: Int
     
     public init(x: Int) { self.x = x }
 
-    public func complexity() -> Double {
+    public func complexity() -> Complexity {
         let c = self.x <= 0 ? Double.greatestFiniteMagnitude : (200.0 + (100.0 / Double(self.x))) 
         // print(self.x, c)
-        return c
+        return Complexity(c)
     }
     
     public func hash() -> Int {
@@ -67,58 +58,17 @@ public struct IntWrapperMutators: Mutators {
         ]
     }
 }
-/*
-extension Int: FuzzInput {
-    public func complexity() -> Double {
-        return 1
-    }
-    
-    public func hash() -> Int {
-        return self.hashValue
-    }
-}
 
-public struct IntMutators: Mutators {
-    public typealias Mutated = Int
-    
-    func nudge(_ x: inout Mutated, _ r: inout Rand) -> Bool {
-        let add = r.int(inside: -10 ..< 10)
-        x = x &+ r.int(inside: -10 ..< 10)
-        return add != 0
-    }
-    
-    func random(_ x: inout Mutated, _ r: inout Rand) -> Bool {
-        x = r.int()
-        return true
-    }
-    
-    func special(_ x: inout Mutated, _ r: inout Rand) -> Bool {
-        let oldX = x
-        x = r.pick(0, Int.min, Int.max)
-        return x != oldX
-    }
-    
-    public init() {}
-    
-    public func weightedMutators(for x: Mutated) -> [((inout Mutated, inout Rand) -> Bool, UInt64)] {
-        return [
-            (self.special, 10),
-            (self.random, 10),
-            (self.nudge, 10),
-        ]
-    }
-}
-*/
 extension FixedWidthInteger where Self: UnsignedInteger {
-    public func complexity() -> Double {
-        return 1
+    public func complexity() -> Complexity {
+        return 1.0
     }
     public func hash() -> Int {
         return self.hashValue
     }
 }
 
-public struct UnsignedIntegerMutators <I: FixedWidthInteger & UnsignedInteger & FuzzInput> : Mutators {
+public struct UnsignedIntegerMutators <I: FixedWidthInteger & UnsignedInteger & FuzzUnit> : Mutators {
     public typealias Mutated = I
     
     func nudge(_ x: inout Mutated, _ r: inout Rand) -> Bool {
@@ -150,9 +100,9 @@ public struct UnsignedIntegerMutators <I: FixedWidthInteger & UnsignedInteger & 
     }
 }
 
-extension Array: FuzzInput where Element: FuzzInput {
-    public func complexity() -> Double {
-        return Double(1 + count)
+extension Array: FuzzUnit where Element: FuzzUnit {
+    public func complexity() -> Complexity {
+        return Complexity(Double(1 + count))
     }
     
     public func hash() -> Int {

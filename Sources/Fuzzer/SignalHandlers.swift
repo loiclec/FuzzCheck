@@ -28,7 +28,7 @@ func setTimer(microseconds: Int32) {
 }
 
 func setSignalHandler(timeout: Int32) {
-    setTimer(microseconds: timeout)
+    // setTimer(microseconds: timeout) // TODO: solve Law of Exclusivity issues with signal handlers
     setSigAction(SIGSEGV, crashHandler)
     setSigAction(SIGBUS, crashHandler)
     setSigAction(SIGABRT, crashHandler)

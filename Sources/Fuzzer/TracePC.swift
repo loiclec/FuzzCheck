@@ -10,8 +10,8 @@ extension UnsafeMutableBufferPointer {
     }
 }
 
-var PCs = UnsafeMutableBufferPointer<PC>.allocateAndInitializeTo(0, capacity: TracePC.maxNumPCs)
-var eightBitCounters = UnsafeMutableBufferPointer<UInt8>.allocateAndInitializeTo(0, capacity: TracePC.maxNumPCs)
+var PCsSet: [PC: Int] = Dictionary(minimumCapacity: TPC.numPCs())
+var eightBitCounters = UnsafeMutableBufferPointer<UInt8>.allocateAndInitializeTo(0, capacity: TPC.numPCs())
 
 func counterToFeature <T: BinaryInteger> (_ counter: T) -> CUnsignedInt {
     precondition(counter > 0)
@@ -44,7 +44,7 @@ final class TracePC {
     init() {}
     
     func numPCs() -> Int {
-        if numGuards == 0 {
+        if numGuards == 0 { // TODO evaluate whether that can happen
             return 1 << TracePC.tracePCBits
         } else {
             return min(TracePC.maxNumPCs, numGuards+1)
@@ -69,7 +69,8 @@ final class TracePC {
         modules.append(buffer)
     }
 
-    func handleCallerCallee(caller: UInt, callee: UInt) {
+    func handleCallerCallee(caller: Int, callee: Int) {
+        let (caller, callee) = (UInt(caller), UInt(callee))
         let bits: UInt = 12
         let mask = (1 << bits) - 1
         let idx: UInt = (caller & mask) | ((callee & mask) << bits)
@@ -77,33 +78,28 @@ final class TracePC {
     }
     
     func getTotalPCCoverage() -> Int {
-        return (1 ..< numPCs()).reduce(0) { $0 + ((PCs[$1] != 0) ? 1 : 0) }
+        return PCsSet.count
     }
     
-    func collectFeatures(_ handleFeature: (Feature) -> Void) {
-        let Counters = eightBitCounters
+    func collectFeatures(_ handle: (Feature) -> Void) {
         let N = numPCs()
-        
-        func handle8BitCounter(_ handleFeature: (Feature) -> Void, _ key: Feature.Key, _ idx: Int, _ counter: UInt8) -> Void {
-            handleFeature(Feature.init(key: key.advanced(by: idx * 8 + Int(counterToFeature(counter))), coverage: .pc))
-        }
-        
         var key: Feature.Key = .init(k: 0)
         
-        for i in 0 ..< N where Counters[i] != 0 {
-            handle8BitCounter(handleFeature, key, i, Counters[i])
+        for i in 0 ..< N where eightBitCounters[i] != 0 {
+            handle(Feature(key: key.advanced(by: i * 8 + Int(counterToFeature(eightBitCounters[i]))), coverage: .pc))
         }
         key = key.advanced(by: N * 8)
     
         if useValueProfile {
             valueProfileMap.forEach {
-                handleFeature(Feature.init(key: key.advanced(by: $0), coverage: .valueProfile))
+                handle(Feature(key: key.advanced(by: $0), coverage: .valueProfile))
             }
             key = key.advanced(by: Int(type(of: valueProfileMap).mapSizeInBits))
         }
     }
     
-    func handleCmp <T: BinaryInteger> (pc: PC, arg1: T, arg2: T) {
+    func handleCmp <T: BinaryInteger> (pc: Int, arg1: T, arg2: T) {
+        let pc = PC(pc)
         let argxor = arg1 ^ arg2
         let argdist = UInt(__popcountll(UInt64(argxor)) + 1)
 

@@ -56,8 +56,8 @@ struct FT : FuzzTest {
 let graphMutators = GraphMutators(vertexMutators: UnsignedIntegerMutators<UInt8>(), initializeVertex: { r in r.byte() })
 
 let seed = CommandLine.arguments.count > 1 ? UInt32(CommandLine.arguments[1])! : UInt32(time(nil))
-
-var fuzzer = Fuzzer(fuzzTarget: FT(), seed: seed)
+print("seed:", seed)
+let fuzzer = Fuzzer(fuzzTarget: FT(), seed: seed)
 fuzzer.loop()
 
 

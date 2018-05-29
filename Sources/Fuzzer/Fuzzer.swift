@@ -14,7 +14,7 @@ public protocol FuzzTest {
     func run(_ u: Unit)
 }
 
-public struct Fuzzer <FT: FuzzTest> {
+public final class Fuzzer <FT: FuzzTest> {
     
     var corpus: Corpus = Corpus()
     var totalNumberOfRuns: Int = 0
@@ -81,13 +81,12 @@ extension Fuzzer {
             TPC.resetMaps()
         }
         static func collectFeatures(_ handle: (Feature) -> Void) {
-            TPC.collectFeatures(handle)
+            return TPC.collectFeatures(handle)
         }
         static func totalPCCoverage() -> Int {
             return TPC.getTotalPCCoverage()
         }
     }
-    
     struct Coeffects {
         func clock() -> UInt {
             return Darwin.clock()
@@ -128,12 +127,12 @@ extension Fuzzer {
     
     enum Effect {
         static func reportStats(updateKind: UpdateKind, totalNumberOfRuns: Int, totalPCCoverage: Int, score: Feature.Coverage.Score, corpusSize: Int, execPerSec: Double, rss: Int) {
-            print(updateKind, terminator: "    ")
-            print("\(totalNumberOfRuns) |", terminator: "    ")
-            print("cov: \(totalPCCoverage)", terminator: "    ")
-            print("score: \(score)", terminator: "    ")
-            print("corp: \(corpusSize)", terminator: "    ")
-            print("exec/s: \(Int(execPerSec))", terminator: "    ")
+            print(updateKind, terminator: "\t")
+            print("\(totalNumberOfRuns) |", terminator: "\t")
+            print("cov: \(totalPCCoverage)", terminator: "\t")
+            print("score: \(score)", terminator: "\t")
+            print("corp: \(corpusSize)", terminator: "\t")
+            print("exec/s: \(Int(execPerSec))", terminator: "\t")
             print("rss: \(rss)")
         }
         
@@ -216,7 +215,7 @@ enum UpdateKind: CustomStringConvertible {
     var description: String {
         switch self {
         case .new:
-            return "NEW"
+            return "NEW "
         case .reduce:
             return "REDUCE"
         case .start:
@@ -230,7 +229,7 @@ enum UpdateKind: CustomStringConvertible {
 }
 
 extension Fuzzer {
-    mutating func runTest() {
+    func runTest() {
         guard case .willRunTest = state else { preconditionFailure() }
         
         ProgramCounterTracer.resetMaps()
@@ -245,46 +244,90 @@ extension Fuzzer {
         totalNumberOfRuns += 1
     }
     
-    mutating func analyzeTestRun() {
+    func analyzeTestRun() {
         guard case .willAnalyzeTestRun(let analysisKind) = state else {
             preconditionFailure()
         }
         
-        var uniqueFeaturesSetTmp: [Feature.Key] = []
-        let updateScoreBefore = corpus.updatedCoverageScore
+        // let updateScoreBefore = corpus.updatedCoverageScore
         
         let currentUnitComplexity = currentUnit.complexity()
         
+
+        /* HERE FOR EFFICIENCY OF THE analyzeRun FUNCTION */
+        var uniqueFeatures: [Feature] = []
+        var replacingFeatures: [(Feature, CorpusIndex)] = []
+        
         ProgramCounterTracer.collectFeatures { feature in
-            if corpus.addFeature(feature, newComplexity: currentUnitComplexity, shrink: shrink) {
-                uniqueFeaturesSetTmp.append(feature.key)
+            if let (oldComplexity, oldCorpusIndex) = corpus.unitInfoForFeature[feature.key] {
+                if currentUnitComplexity < oldComplexity {
+                    return replacingFeatures.append((feature, oldCorpusIndex))
+                } else {
+                    return
+                }
+            } else {
+                uniqueFeatures.append(feature)
+            }
+        }
+
+        if replacingFeatures.isEmpty, uniqueFeatures.isEmpty {
+            state = .didAnalyzeTestRun(didUpdateCorpus: false) // TODO: double check that
+            return
+        }
+        
+        let getUniqueUnitIndexToReplace = { () -> CorpusIndex? in
+            guard let first = replacingFeatures.first?.1 else { return nil }
+            for (_, i) in replacingFeatures {
+                guard first == i else { return nil }
+            }
+            return first
+        }
+        
+        if uniqueFeatures.isEmpty, let index = getUniqueUnitIndexToReplace() {
+            // still have to check that the old unit does not contain features not included in the current unit
+            let oldUnitInfo = corpus.units[index.value]
+            if replacingFeatures.lazy.map({$0.0.key}) == oldUnitInfo.uniqueFeaturesSet {
+                corpus.replace(index, with: currentUnit)
+                for (f, _) in replacingFeatures {
+                    corpus.unitInfoForFeature[f.key] = (currentUnitComplexity, index)
+                }
+                state = .didAnalyzeTestRun(didUpdateCorpus: true) // TODO: double check that
+                return
             }
         }
         
-        let deltaScore = Feature.Coverage.Score(s: corpus.updatedCoverageScore.s - updateScoreBefore.s)
-        guard deltaScore.s == 0 else {
-            corpus.addToCorpus(unit: currentUnit, coverageScore: deltaScore, mayDeleteFile: analysisKind.mayDeleteFile, featureSet: uniqueFeaturesSetTmp)
-            state = .didAnalyzeTestRun(didUpdateCorpus: true)
-            return
+        let replacedCoverage = replacingFeatures.reduce(0) { $0 + $1.0.coverage.importance.s }
+        let newCoverage = uniqueFeatures.reduce(0) { $0 + $1.coverage.importance.s }
+        
+        let coverageScore = Feature.Coverage.Score(replacedCoverage + newCoverage)
+        corpus.addedCoverageScore = Feature.Coverage.Score(newCoverage)
+        
+        let newUnitInfo = Corpus.UnitInfo(
+            unit: currentUnit,
+            coverageScore: coverageScore,
+            mayDeleteFile: analysisKind.mayDeleteFile,
+            reduced: false,
+            uniqueFeaturesSet: replacingFeatures.map { $0.0.key } + uniqueFeatures.map { $0.key }
+        )
+        
+        for (feature, oldUnitInfoIndex) in replacingFeatures {
+            corpus.units[oldUnitInfoIndex.value].coverageScore.s -= feature.coverage.importance.s
+            precondition(corpus.units[oldUnitInfoIndex.value].coverageScore >= 0)
+            if corpus.units[oldUnitInfoIndex.value].coverageScore == 0 {
+                corpus.deleteUnit(oldUnitInfoIndex)
+            }
+            corpus.unitInfoForFeature[feature.key] = (currentUnitComplexity, CorpusIndex(value: corpus.units.endIndex))
         }
-        uniqueFeaturesSetTmp.sort()
-
-        if
-            reduceUnits,
-            case .loopIteration(mutatingUnitIndex: let uidx) = analysisKind,
-            case let unitInfo = corpus.units[uidx.value],
-            unitInfo.uniqueFeaturesSet.count != 0,
-            uniqueFeaturesSetTmp == unitInfo.uniqueFeaturesSet,
-            unitInfo.unit.complexity() > currentUnitComplexity
-        {
-            corpus.replace(uidx, with: currentUnit)
-            state = .didAnalyzeTestRun(didUpdateCorpus: true)
+        for feature in uniqueFeatures {
+            corpus.unitInfoForFeature[feature.key] = (currentUnitComplexity, CorpusIndex(value: corpus.units.endIndex))
         }
         
-        state = .didAnalyzeTestRun(didUpdateCorpus: false)
+        corpus.units.append(newUnitInfo)
+        corpus.updateCumulativeWeights()
+        state = .didAnalyzeTestRun(didUpdateCorpus: true)
     }
    
-    mutating func mutateAndTestOne() {
+    func mutateAndTestOne() {
         guard case .willMutateAndTestOne = state else {
             preconditionFailure()
         }
@@ -306,14 +349,13 @@ extension Fuzzer {
             guard case .didAnalyzeTestRun(let updatedCorpus) = state else { preconditionFailure() }
             
             if updatedCorpus {
-                numberOfNewUnitsAdded += 1
                 reportStatus(corpus.units[idx.value].reduced ? .reduce : .new)
                 Effect.writeToOutputCorpus(currentUnit)
             }
         }
     }
 
-    public mutating func loop() {
+    public func loop() {
         reportStatus(.start)
         readAndExecuteCorpora()
         reportStatus(.didReadCorpus)
@@ -341,9 +383,9 @@ extension Fuzzer {
         )
     }
     
-    mutating func readAndExecuteCorpora() {
+    func readAndExecuteCorpora() {
         var units = [FT.baseUnit()]
-        units += coeffects.readInputCorpus()
+        //units += coeffects.readInputCorpus()
         /*
         let complexities = units.map { $0.complexity() }
         let totalComplexity = complexities.reduce(0) { $0 + $1 }
@@ -407,14 +449,6 @@ extension Fuzzer {
         }
     }
 }
-
-
-
-
-
-
-
-
 
 
 

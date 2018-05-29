@@ -78,19 +78,47 @@ extension Feature.Key: Strideable {
 
 extension Feature.Coverage {
 
-    struct Score: CustomStringConvertible {
+    struct Score {
         var s: Int
-        var description: String { return s.description }
+        init(_ s: Int) { self.s = s }
     }
 
     var importance: Score {
         switch self {
         case .pc:
-            return .init(s: 1)
+            return .init(1)
         case .valueProfile:
-            return .init(s: 1)
+            return .init(1)
         }
     }
+}
+extension Feature.Coverage.Score: ExpressibleByIntegerLiteral {
+    init(integerLiteral value: Int) {
+        self.s = value
+    }
+}
+extension Feature.Coverage.Score: Comparable {
+    static func < (lhs: Feature.Coverage.Score, rhs: Feature.Coverage.Score) -> Bool {
+        return lhs.s < rhs.s
+    }
+    static func <= (lhs: Feature.Coverage.Score, rhs: Feature.Coverage.Score) -> Bool {
+        return lhs.s <= rhs.s
+    }
+    static func > (lhs: Feature.Coverage.Score, rhs: Feature.Coverage.Score) -> Bool {
+        return lhs.s > rhs.s
+    }
+    static func >= (lhs: Feature.Coverage.Score, rhs: Feature.Coverage.Score) -> Bool {
+        return lhs.s >= rhs.s
+    }
+    static func == (lhs: Feature.Coverage.Score, rhs: Feature.Coverage.Score) -> Bool {
+        return lhs.s == rhs.s
+    }
+    static func != (lhs: Feature.Coverage.Score, rhs: Feature.Coverage.Score) -> Bool {
+        return lhs.s != rhs.s
+    }
+}
+extension Feature.Coverage.Score: CustomStringConvertible {
+    var description: String { return s.description }
 }
 
 typealias FeatureDictionary = UnsafeMutableBufferPointer<(Complexity, CorpusIndex)?>

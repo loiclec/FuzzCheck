@@ -184,9 +184,9 @@ public struct GraphMutators <VM: Mutators> : Mutators where VM.Mutated: Hashable
     
     public func weightedMutators(for x: Mutated) -> [((inout Mutated, inout Rand) -> Bool, UInt64)] {
         return [
-            //(self.addVertices, 1),
+            (self.addVertices, 1),
             (self.addEdges, 1),
-            (self.copySubset, 6),
+            (self.copySubset, 1),
             (self.splitEdge, 11),
             (self.addFriend, 16),
             (self.moveEdge, 17),

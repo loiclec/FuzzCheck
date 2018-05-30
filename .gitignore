@@ -2,3 +2,4 @@
 *.xcodeproj
 .DS_Store
 crashes
+Corpus/

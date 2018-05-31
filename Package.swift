@@ -1,4 +1,4 @@
-// swift-tools-version:4.1
+// swift-tools-version:4.2
 import PackageDescription
 
 let package = Package(
@@ -18,6 +18,6 @@ let package = Package(
         .target(name: "ToTest", dependencies: ["Fuzzer", "ModuleToTest", "ModuleToTestMutators"]),
 
         .testTarget(name: "FuzzerTests", dependencies: ["Fuzzer"])
-    ]
+    ],
+    fuzzedTargets: ["ToTest", "ModuleToTest"]
 )
-

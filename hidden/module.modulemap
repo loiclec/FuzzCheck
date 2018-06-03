@@ -1,4 +1,0 @@
-module CBuiltinsNotAvailableInSwift {
-    umbrella "/Users/loic/Projects/swiftpm-fuzzed/Sources/CBuiltinsNotAvailableInSwift/include"
-    export *
-}

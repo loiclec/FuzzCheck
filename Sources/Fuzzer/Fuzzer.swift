@@ -58,6 +58,10 @@ public final class FuzzerInfo <T, World: FuzzerWorld> where World.Unit == T {
         stats.score = corpus.coverageScore.s
     }
     
+    func updatePeakMemoryUsage() {
+        stats.rss = Int(world.getPeakMemoryUsage())
+    }
+    
     func receive(signal: Signal) -> Never {
         world.reportEvent(.caughtSignal(signal), stats: stats)
         switch signal {
@@ -89,7 +93,7 @@ public final class Fuzzer <FT: FuzzTest, World: FuzzerWorld> where World.Unit ==
     public init(fuzzTest: FT, settings: FuzzerSettings, world: World) {
         print(MemoryLayout<Feature>.size, MemoryLayout<Feature>.stride)
         self.fuzzTest = fuzzTest
-        
+        print(TPC.numPCs())
         self.info = Info(unit: FT.baseUnit(), settings: settings, world: world)
     
         let signals: [Signal] = [.segmentationViolation, .busError, .abort, .illegalInstruction, .floatingPointException, .interrupt, .softwareTermination, .fileSizeLimitExceeded]
@@ -175,7 +179,8 @@ extension Fuzzer {
         var replacingFeatures: [(Feature, CorpusIndex)] = []
         
         TPC.collectFeatures { feature in
-            if let (oldComplexity, oldCorpusIndex) = info.corpus.unitInfoForFeature[feature.key] {
+            // a feature is Comparable, and they are passed here in growing order. see: #mxrvFXBpY9ij
+            if let (oldComplexity, oldCorpusIndex) = info.corpus.unitInfoForFeature[feature] {
                 if currentUnitComplexity < oldComplexity {
                     return replacingFeatures.append((feature, oldCorpusIndex))
                 } else {
@@ -188,32 +193,35 @@ extension Fuzzer {
         
         info.updateStatsAfterRunAnalysis()
         
-        if replacingFeatures.isEmpty, uniqueFeatures.isEmpty {
+        // #HGqvcfCLVhGr
+        guard !(replacingFeatures.isEmpty && uniqueFeatures.isEmpty) else {
             info.state = .didAnalyzeTestRun(didUpdateCorpus: false) // TODO: double check that
             return
         }
-        
-        let getUniqueUnitIndexToReplace = { () -> CorpusIndex? in
-            guard let first = replacingFeatures.first?.1 else { return nil }
-            for (_, i) in replacingFeatures {
-                guard first == i else { return nil }
-            }
-            return first
-        }
-        
-        if uniqueFeatures.isEmpty, let index = getUniqueUnitIndexToReplace() {
-            // still have to check that the old unit does not contain features not included in the current unit
+  
+        // because of #HGqvcfCLVhGr I know that replacingFeatures is not empty
+        if
+            uniqueFeatures.isEmpty,
+            case let index = replacingFeatures[0].1,
+            replacingFeatures.allSatisfy({ $0.1 == index })
+        {
+            
             let oldUnitInfo = info.corpus.units[index.value]
-            if replacingFeatures.lazy.map({$0.0.key}) == oldUnitInfo.uniqueFeaturesSet {
+            // still have to check that the old unit does not contain features not included in the current unit
+            // only if they are completely equal can we replace the old unit by the new one
+            // we can compare them in that way because both collections are sorted, see: #mxrvFXBpY9ij
+            if replacingFeatures.lazy.map({$0.0}) == oldUnitInfo.uniqueFeaturesSet {
                 let effect = info.corpus.replace(index, with: info.unit)
                 try! effect(&info.world)
                 
                 for (f, _) in replacingFeatures {
-                    info.corpus.unitInfoForFeature[f.key] = (currentUnitComplexity, index)
+                    info.corpus.unitInfoForFeature[f] = (currentUnitComplexity, index)
                 }
                 info.state = .didAnalyzeTestRun(didUpdateCorpus: true) // TODO: double check that
                 return
             }
+            // else if the old unit had more features than the current unit,
+            // then the current unit is not interesting at all and we ignore it
         }
         
         let replacedCoverage = replacingFeatures.reduce(0) { $0 + $1.0.coverage.importance.s }
@@ -227,7 +235,7 @@ extension Fuzzer {
             coverageScore: coverageScore,
             mayDeleteFile: analysisKind.mayDeleteFile,
             reduced: false,
-            uniqueFeaturesSet: replacingFeatures.map { $0.0.key } + uniqueFeatures.map { $0.key }
+            uniqueFeaturesSet: replacingFeatures.map { $0.0 } + uniqueFeatures
         )
         
         for (feature, oldUnitInfoIndex) in replacingFeatures {
@@ -237,10 +245,10 @@ extension Fuzzer {
                 let effect = info.corpus.deleteUnit(oldUnitInfoIndex)
                 try! effect(&info.world)
             }
-            info.corpus.unitInfoForFeature[feature.key] = (currentUnitComplexity, CorpusIndex(value: info.corpus.units.endIndex))
+            info.corpus.unitInfoForFeature[feature] = (currentUnitComplexity, CorpusIndex(value: info.corpus.units.endIndex))
         }
         for feature in uniqueFeatures {
-            info.corpus.unitInfoForFeature[feature.key] = (currentUnitComplexity, CorpusIndex(value: info.corpus.units.endIndex))
+            info.corpus.unitInfoForFeature[feature] = (currentUnitComplexity, CorpusIndex(value: info.corpus.units.endIndex))
         }
         
         info.corpus.units.append(newUnitInfo)
@@ -270,6 +278,7 @@ extension Fuzzer {
             guard case .didAnalyzeTestRun(let updatedCorpus) = info.state else { preconditionFailure() }
             
             if updatedCorpus {
+                info.updatePeakMemoryUsage()
                 let updateKind: FuzzerUpdateKind = info.corpus.units[idx.value].reduced ? .reduce : .new
                 info.world.reportEvent(.updatedCorpus(updateKind), stats: info.stats)
                 try! info.world.addToOutputCorpus(info.unit)

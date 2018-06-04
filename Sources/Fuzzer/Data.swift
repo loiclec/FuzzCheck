@@ -40,59 +40,60 @@ extension Complexity: CustomStringConvertible {
 }
 
 
-struct Feature {
-    private let lowerBits: UInt16 // all 16 bits are used, they are part of the key
-    private let upperBits: UInt16 // 5 bits are used for the key, and one bit for the coverage
+struct Feature: Equatable {
+    static let keyLengthInBits = 24
     
-    var key: Key {
-        return Key.init(k: (Int(upperBits & 0b11111) << 16) | Int(lowerBits))
-    }
-    var coverage: Coverage {
-        if (upperBits & 0b100000) == 0b100000 {
-            return .valueProfile
-        } else {
-            return .pc
-        }
-    }
-    init(key: Key, coverage: Coverage) {
-        self.lowerBits = UInt16(key.k & 0xffff) // store the lower 16 bits of the key
-        // store the bit for the coverage at position 6 and the remaining 5 bits of the key
-        self.upperBits = UInt16(Int(coverage.rawValue << 6) | (key.k >> 16)) // this will fail if the key used more than 21 bits
-    }
+    static let keyMask: UInt32      = 0x00_ffffff // 24 lower bits
+    static let coverageMask: UInt32 = 0xff_000000 // 8 upper bits
     
-    struct Key {
-        var k: Int // 21 bits
+    fileprivate var bits: UInt32
+    
+    fileprivate init(bits: UInt32) {
+        self.bits = bits
     }
     /*
-    let key: Key
-    let coverage: Coverage // 1 bit
-     */
+     The lower 24 bits are meant to index wither the eightBitCounters array or the valueProfileMap.
+     The eightBitCounters array has a maximum size of 2^21, and each counter can each have up to 8 associated features,
+     hence 24 bits are used to uniquely index a feature associated with a counter
+     The valueProfileMap is smaller than the eightBitCounters.
+     
+     The upper 8 bits are there to distinguish between the coverage kind of the feature. Currently, only 1 but is used to distinguish between pc and valueProfile
+    */
+    
+    var key: UInt32 {
+        // take the lower 24 bits
+        get {
+            return bits & Feature.keyMask
+        }
+        set {
+            bits &= ~Feature.keyMask // reset bits of key
+            bits |= newValue & Feature.keyMask
+        }
+    }
+    var coverage: Coverage {
+        get {
+            let rawValue = UInt8(bits >> Feature.keyLengthInBits)
+            return Coverage(rawValue: rawValue)!
+        }
+        set {
+            bits &= Feature.keyMask // reset bits of coverage
+            bits |= UInt32(newValue.rawValue) << Feature.keyLengthInBits
+        }
+    }
+    
+    init(key: UInt32, coverage: Coverage) {
+        self.bits = (key & Feature.keyMask) | (UInt32(coverage.rawValue) << Feature.keyLengthInBits)
+    }
+    
     enum Coverage: UInt8 {
         case pc = 0
         case valueProfile = 1
-        //case newComparison
-        //case redundantComparison
     }
 }
 
-extension Feature.Key: Hashable, Comparable {
-    var hashValue: Int {
-        return k.hashValue
-    }
-    static func == (lhs: Feature.Key, rhs: Feature.Key) -> Bool {
-        return lhs.k == rhs.k
-    }
-}
-
-extension Feature.Key: Strideable {
-    typealias Stride = Int
-    
-    func distance(to other: Feature.Key) -> Int {
-        return k.distance(to: other.k)
-    }
-    
-    func advanced(by n: Int) -> Feature.Key {
-        return .init(k: k.advanced(by: n))
+extension Feature {
+    static func &+ (lhs: Feature, rhs: UInt32) -> Feature {
+        return Feature(bits: lhs.bits &+ rhs)
     }
 }
 
@@ -145,18 +146,19 @@ typealias FeatureDictionary = UnsafeMutableBufferPointer<(Complexity, CorpusInde
 
 extension UnsafeMutableBufferPointer where Element == (Complexity, CorpusIndex)? {
     static func createEmpty() -> UnsafeMutableBufferPointer {
-        return UnsafeMutableBufferPointer.allocateAndInitializeTo(nil, capacity: 1 << 21)
+        print("TPC numPCs:", TPC.numPCs())
+                                                    // the size of the array is 2^(nbr of bits used by Feature)
+        return UnsafeMutableBufferPointer.allocateAndInitializeTo(nil, capacity: 1 << 25)
     }
-    subscript(idx: Feature.Key) -> (Complexity, CorpusIndex)? {
+    subscript(idx: Feature) -> (Complexity, CorpusIndex)? {
         get {
-            return (self.baseAddress.unsafelyUnwrapped + idx.k).pointee// .pointee [idx.k/* % count*/]
+            return (self.baseAddress.unsafelyUnwrapped + Int(idx.bits)).pointee
         }
         set {
-            (self.baseAddress.unsafelyUnwrapped + idx.k).pointee = newValue//self[idx.k/* % count*/] = newValue
+            (self.baseAddress.unsafelyUnwrapped + Int(idx.bits)).pointee = newValue
         }
     }
 }
-
 
 
 

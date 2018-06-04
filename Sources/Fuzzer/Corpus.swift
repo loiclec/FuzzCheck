@@ -33,7 +33,7 @@ extension FuzzerInfo {
             var coverageScore: Feature.Coverage.Score
             var mayDeleteFile: Bool
             var reduced: Bool
-            var uniqueFeaturesSet: [Feature.Key]
+            var uniqueFeaturesSet: [Feature]
         }
         var units: [UnitInfo] = []
         var cumulativeWeights: [UInt64] = []

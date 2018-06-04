@@ -13,7 +13,7 @@ extension UnsafeMutableBufferPointer {
 var PCsSet: [PC: Int] = Dictionary(minimumCapacity: TPC.numPCs())
 var eightBitCounters = UnsafeMutableBufferPointer<UInt8>.allocateAndInitializeTo(0, capacity: TPC.numPCs())
 
-func counterToFeature <T: BinaryInteger> (_ counter: T) -> CUnsignedInt {
+func counterToFeature <T: BinaryInteger> (_ counter: T) -> UInt32 {
     precondition(counter > 0)
    
     if counter >= 128 { return 7 }
@@ -44,11 +44,8 @@ final class TracePC {
     init() {}
     
     func numPCs() -> Int {
-        if numGuards == 0 { // TODO evaluate whether that can happen
-            return 1 << TracePC.tracePCBits
-        } else {
-            return min(TracePC.maxNumPCs, numGuards+1)
-        }
+        precondition(numGuards > 0 && numGuards < TracePC.maxNumPCs)
+        return numGuards+1
     }
     
     func handleInit(start: UnsafeMutablePointer<UInt32>, stop: UnsafeMutablePointer<UInt32>) {
@@ -76,19 +73,27 @@ final class TracePC {
     }
     
     func collectFeatures(_ handle: (Feature) -> Void) {
+        // a feature is Comparable, and they are passed here in a deterministic, growing order. ref: #mxrvFXBpY9ij
         let N = numPCs()
-        var key: Feature.Key = .init(k: 0)
         
-        for i in 0 ..< N where eightBitCounters[i] != 0 {
-            handle(Feature(key: key.advanced(by: i * 8 + Int(counterToFeature(eightBitCounters[i]))), coverage: .pc))
+        var feature = Feature(key: 0, coverage: .pc)
+        
+        for i in 0 ..< N where eightBitCounters[i] != 0 { // TODO: iterate 64bits at a time
+            let counterFeatureOffset = counterToFeature(eightBitCounters[i])
+            let f = feature &+ (UInt32(i) &* 8 &+ counterFeatureOffset)
+            precondition(f.coverage == .pc)
+            handle(f)
         }
-        key = key.advanced(by: N * 8)
-    
+        
+        feature.coverage = .valueProfile
+        feature.key = 0
+        
         if useValueProfile {
             valueProfileMap.forEach {
-                handle(Feature(key: key.advanced(by: $0), coverage: .valueProfile))
+                let f = feature &+ $0
+                precondition(f.coverage == .valueProfile)
+                handle(f)
             }
-            key = key.advanced(by: Int(type(of: valueProfileMap).mapSizeInBits))
         }
     }
     
@@ -145,13 +150,14 @@ struct ValueBitMap {
     
     var sizeInBits: UInt { return ValueBitMap.mapSizeInBits }
     
-    func forEach(_ f: (Int) -> Void) {
+    func forEach(_ f: (UInt32) -> Void) {
         for i in 0 ..< ValueBitMap.mapSizeInWords {
-            let M = map[Int(i)]
+            let i = Int(i)
+            let M = map[i]
             guard M != 0 else { continue }
             for j in 0 ..< MemoryLayout<UInt>.size * 8 {
                 guard M & (UInt(1) << j) != 0 else { continue }
-                f(Int(i) * MemoryLayout<UInt>.size * 8 + j)
+                f(UInt32(i * MemoryLayout<UInt>.size * 8 + j))
             }
         }
     }

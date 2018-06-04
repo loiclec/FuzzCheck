@@ -37,8 +37,7 @@ extension Graph: Codable where V: Codable {
         }
     }
     public func encode(to encoder: Encoder) throws {
-        var container = encoder.unkeyedContainer()
-        try container.encode(self.map { Pair($0.data, $0.edges) })
+        try self.map { Pair($0.data, $0.edges) }.encode(to: encoder)
     }
 }
 

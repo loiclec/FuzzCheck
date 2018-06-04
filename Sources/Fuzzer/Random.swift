@@ -94,10 +94,41 @@ extension Rand {
         //return i
     }
     
+    public mutating func weightedPickIndex <A, B, W: RandomAccessCollection> (smallCumulativeWeights: W) -> W.Index where W.Element == (A, B), B: FixedWidthInteger & UnsignedInteger {
+        
+        let randWeight: B = integer(inside: 0 ..< (smallCumulativeWeights.last?.1 ?? 0))
+        
+        return smallCumulativeWeights.firstIndex(where: { $0.1 >= randWeight })!
+        /*
+        switch cumulativeWeights.binarySearch(compare: { $0.1.compare(randWeight) }) {
+        case .success(let i):
+            return min(cumulativeWeights.index(before: cumulativeWeights.endIndex), cumulativeWeights.index(after: i))
+        case .failure(_, let end):
+            return min(cumulativeWeights.index(before: cumulativeWeights.endIndex), end)
+        }*/
+        //let randWeight = (self.integer(inside: 0 ..< cumulativeWeights.last!)) + 1
+        //let i = cumulativeWeights.index(where: { $0 > randWeight })!
+        //return i
+    }
+    
+    
     public mutating func weightedPick <T, C: RandomAccessCollection> (from c: C) -> T where C.Element == (T, UInt64), C.Index == Int {
         return c[weightedPickIndex(cumulativeWeights: c)].0
     }
     
+    public mutating func weightedPick <T, C: RandomAccessCollection> (fromSmall c: C) -> T where C.Element == (T, UInt64), C.Index == Int {
+        
+        let randWeight: UInt64 = uint64() % c.last!.1// integer(inside: 0 ..< (smallCumulativeWeights.last!.1))
+        
+        for (x, y) in c {
+            if y >= randWeight {
+                return x
+            }
+        }
+        fatalError()
+        //return c[weightedPickIndex(smallCumulativeWeights: c)].0
+    }
+    /*
     public mutating func slice <C: RandomAccessCollection> (of c: C, maxLength: Int) -> C.SubSequence where C.Index == Int {
         guard !c.isEmpty else { return c[c.startIndex ..< c.startIndex] }
         let start = int(inside: c.startIndex ..< c.endIndex)
@@ -111,11 +142,12 @@ extension Rand {
     }
     public mutating func pick <T> (_ ts: T...) -> T {
         return pick(from: ts)
-    }
+    }*/
 }
 
 extension Rand {
     mutating func shuffle <C> (_ c: inout C) where C: MutableCollection, C: RandomAccessCollection, C.Indices == CountableRange<Int> {
+        guard !c.isEmpty else { return }
         for i in (0 ..< c.count).reversed() {
             c.swapAt(int(inside: 0 ..< i+1), i)
         }

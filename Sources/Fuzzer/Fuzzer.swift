@@ -14,28 +14,29 @@ public protocol FuzzTest {
     func run(_ u: Unit)
 }
 
-public final class Fuzzer <FT: FuzzTest> {
+/*
+ For some reason having the fuzzer be generic over FuzzTest and containing the SignalsHandler was a problem.
+ So I created another type that only depends on the FuzzUnit type and gather as much data as I can here, leaving
+ the fuzzer with only FuzzTest-related properties and methods.
+ */
+public final class FuzzerInfo <T, World: FuzzerWorld> where World.Unit == T {
     
-    var corpus: Corpus = Corpus()
-    var totalNumberOfRuns: Int = 0
-    var currentUnit: FT.Unit = FT.baseUnit()
-    var startTime: UInt = 0
-    var stopTime: UInt = 0
-    var runningTest: Bool = false
+    let corpus: Corpus = Corpus()
+    var unit: T
+
+    var stats: FuzzerStats
+    let settings: FuzzerSettings
     
-    var numberOfNewUnitsAdded: Int = 0
-    
-    var maxUnitComplexity: UInt64 = 0
-    let shuffleAtStartup: Bool = true
-    let defaultMaxUnitComplexity: UInt64 = 256
-    let mutateDepth: Int = 3
-    let maxNumberOfRuns: Int = Int.max
-    let reduceUnits: Bool = true
-    let shrink: Bool = true
-    var coeffects: Coeffects
-    let fuzzTarget: FT
     var processStartTime: UInt = 0
-    let timeout: Int32 = Int32.max
+    var world: World
+    var state: State = .initial
+
+    init(unit: T, settings: FuzzerSettings, world: World) {
+        self.unit = unit
+        self.stats = FuzzerStats()
+        self.settings = settings
+        self.world = world
+    }
     
     enum State: Equatable {
         case initial
@@ -49,14 +50,53 @@ public final class Fuzzer <FT: FuzzTest> {
         case done
     }
     
-    var state: State
+    func updateStatsAfterRunAnalysis() {
+        let now = world.clock()
+        let seconds = Double(now - processStartTime) / 1_000_000
+        stats.executionsPerSecond = Int((Double(stats.totalNumberOfRuns) / seconds).rounded())
+        stats.totalPCCoverage = TPC.getTotalPCCoverage()
+        stats.score = corpus.coverageScore.s
+    }
+    
+    func receive(signal: Signal) -> Never {
+        world.reportEvent(.caughtSignal(signal), stats: stats)
+        switch signal {
+        case .illegalInstruction, .abort, .busError, .floatingPointException:
+            try! world.saveArtifact(unit, because: .crash)
+            exit(1)
+            
+        case .fileSizeLimitExceeded:
+            exit(1)
+            
+        case .interrupt:
+            exit(0)
+            
+        default:
+            exit(1)
+        }
+    }
+}
 
-    public init(fuzzTarget: FT, seed: UInt32) {
-        self.state = .initial
-        self.fuzzTarget = fuzzTarget
-        self.coeffects = Coeffects(rand: Rand(seed: seed))
-        coordinator._send = self.receive
-        setSignalHandler(timeout: timeout)
+public final class Fuzzer <FT: FuzzTest, World: FuzzerWorld> where World.Unit == FT.Unit {
+    
+    typealias Info = FuzzerInfo<FT.Unit, World>
+    
+    let info: Info
+    
+    let fuzzTest: FT
+    let signalsHandler: SignalsHandler
+
+    public init(fuzzTest: FT, settings: FuzzerSettings, world: World) {
+        print(MemoryLayout<Feature>.size, MemoryLayout<Feature>.stride)
+        self.fuzzTest = fuzzTest
+        
+        self.info = Info(unit: FT.baseUnit(), settings: settings, world: world)
+    
+        let signals: [Signal] = [.segmentationViolation, .busError, .abort, .illegalInstruction, .floatingPointException, .interrupt, .softwareTermination, .fileSizeLimitExceeded]
+        
+        self.signalsHandler = SignalsHandler(signals: signals) { [info] signal in
+            info.receive(signal: signal)
+        }
     }
 }
 
@@ -74,130 +114,11 @@ enum AnalysisKind: Equatable {
     }
 }
 
-extension Fuzzer {
-    
-    enum ProgramCounterTracer {
-        static func resetMaps() {
-            TPC.resetMaps()
-        }
-        static func collectFeatures(_ handle: (Feature) -> Void) {
-            return TPC.collectFeatures(handle)
-        }
-        static func totalPCCoverage() -> Int {
-            return TPC.getTotalPCCoverage()
-        }
-    }
-    struct Coeffects {
-        func clock() -> UInt {
-            return Darwin.clock()
-        }
-        func peakRssMB() -> Int {
-            var r: rusage = rusage.init()
-            if getrusage(RUSAGE_SELF, &r) != 0 {
-                return 0
-            }
-            return r.ru_maxrss >> 20
-        }
-        
-        func readInputCorpus() -> [FT.Unit] {
-            let inputCorpus = "Corpus/"
-            guard let files = try? FileManager.default.contentsOfDirectory(atPath: inputCorpus) else {
-                print("Could not read contents of \(inputCorpus)")
-                preconditionFailure()
-            }
-            var units: [FT.Unit] = []
-            print("Info: \(files.count) found in \(inputCorpus)")
-            for f in files {
-                let decoder = JSONDecoder()
-                guard
-                    let data = FileManager.default.contents(atPath: "\(inputCorpus)/\(f)"),
-                    let unit = try? decoder.decode(FT.Unit.self, from: data)
-                    else {
-                        print("Could not decode file \(f)")
-                        preconditionFailure()
-                        continue
-                }
-                units.append(unit)
-            }
-            return units
-        }
-        
-        var rand: Rand
-    }
-    
-    enum Effect {
-        static func reportStats(updateKind: UpdateKind, totalNumberOfRuns: Int, totalPCCoverage: Int, score: Feature.Coverage.Score, corpusSize: Int, execPerSec: Double, rss: Int) {
-            print(updateKind, terminator: "\t")
-            print("\(totalNumberOfRuns) |", terminator: "\t")
-            print("cov: \(totalPCCoverage)", terminator: "\t")
-            print("score: \(score)", terminator: "\t")
-            print("corp: \(corpusSize)", terminator: "\t")
-            print("exec/s: \(Int(execPerSec))", terminator: "\t")
-            print("rss: \(rss)")
-        }
-        
-        static func writeToOutputCorpus(_ unit: FT.Unit) {
-            let outputCorpus = "Corpus"
-            let path = "\(outputCorpus)/\(hashToString(unit.hash()))"
-            let encoder = JSONEncoder()
-            do {
-                let data = try encoder.encode(unit)
-                guard FileManager.default.createFile(atPath: path, contents: data, attributes: nil) else {
-                    throw NSError() // TODO
-                }
-            } catch let e {
-                print(e)
-            }
-        }
-        static func deleteFile(unitInfo: Corpus.UnitInfo) {
-            let outputCorpus = "Corpus" // TODO
-            guard !outputCorpus.isEmpty, unitInfo.mayDeleteFile else { return }
-            let path = "\(outputCorpus)/\(hashToString(unitInfo.unit.hash()))" // TODO: more robust solution
-            unlink(path)
-        }
-        
-        static func dumpUnit(prefix: String, reason: StopReason, unit: FT.Unit) {
-            // print mutation sequence
-            print("Base unit: \(hashToString(unit.hash()))")
-            print(unit)
-            writeUnitToFileWithPrefix(prefix + reason.description, unit: unit)
-        }
-        
-        static func writeUnitToFileWithPrefix(_ prefix: String, unit: FT.Unit) {
-            let path = prefix + hashToString(unit.hash())
-            let encoder = JSONEncoder()
-            do {
-                let data = try encoder.encode(unit)
-                guard FileManager.default.createFile(atPath: path, contents: data, attributes: nil) else {
-                    throw NSError.init()
-                }
-            } catch let e {
-                print(e)
-            }
-            print("artifact_prefix=\(prefix)")
-            print("Test unit written to \(path)")
-        }
-        
-        static func report(signal: Coordinator.Signal) {
-            switch signal {
-            case .alarm:
-                print("\n================ TIMEOUT ================")
-            case .crash:
-                print("\n================ CRASH DETECTED ================")
-            case .fileSizeExceed:
-                print("\n================ FILE SIZE EXCEEDED ================")
-            case .interrupt:
-                print("\n================ RUN INTERRUPTED ================")
-            }
-        }
-    }
-}
-
-enum StopReason: CustomStringConvertible {
+public enum FuzzerStopReason: CustomStringConvertible {
     case crash
     case timeout
     
-    var description: String {
+    public var description: String {
         switch self {
         case .crash: return "crash"
         case .timeout: return "timeout"
@@ -205,14 +126,14 @@ enum StopReason: CustomStringConvertible {
     }
 }
 
-enum UpdateKind: CustomStringConvertible {
+public enum FuzzerUpdateKind: CustomStringConvertible {
     case new
     case reduce
     case start
     case didReadCorpus
     case done
     
-    var description: String {
+    public var description: String {
         switch self {
         case .new:
             return "NEW "
@@ -230,36 +151,31 @@ enum UpdateKind: CustomStringConvertible {
 
 extension Fuzzer {
     func runTest() {
-        guard case .willRunTest = state else { preconditionFailure() }
+        guard case .willRunTest = info.state else { preconditionFailure() }
         
-        ProgramCounterTracer.resetMaps()
+        TPC.resetMaps()
         
-        let startTime = coeffects.clock()
-        state = .runningTest(startTime: startTime)
+        let startTime = info.world.clock()
+        info.state = .runningTest(startTime: startTime)
         
-        _ = fuzzTarget.run(currentUnit)
+        _ = fuzzTest.run(info.unit)
         
-        state = .didRunTest(timeTaken: coeffects.clock() - startTime)
+        info.state = .didRunTest(timeTaken: info.world.clock() - startTime)
 
-        totalNumberOfRuns += 1
+        info.stats.totalNumberOfRuns += 1
     }
-    
     func analyzeTestRun() {
-        guard case .willAnalyzeTestRun(let analysisKind) = state else {
+        guard case .willAnalyzeTestRun(let analysisKind) = info.state else {
             preconditionFailure()
         }
         
-        // let updateScoreBefore = corpus.updatedCoverageScore
+        let currentUnitComplexity = info.unit.complexity()
         
-        let currentUnitComplexity = currentUnit.complexity()
-        
-
-        /* HERE FOR EFFICIENCY OF THE analyzeRun FUNCTION */
         var uniqueFeatures: [Feature] = []
         var replacingFeatures: [(Feature, CorpusIndex)] = []
         
-        ProgramCounterTracer.collectFeatures { feature in
-            if let (oldComplexity, oldCorpusIndex) = corpus.unitInfoForFeature[feature.key] {
+        TPC.collectFeatures { feature in
+            if let (oldComplexity, oldCorpusIndex) = info.corpus.unitInfoForFeature[feature.key] {
                 if currentUnitComplexity < oldComplexity {
                     return replacingFeatures.append((feature, oldCorpusIndex))
                 } else {
@@ -269,9 +185,11 @@ extension Fuzzer {
                 uniqueFeatures.append(feature)
             }
         }
-
+        
+        info.updateStatsAfterRunAnalysis()
+        
         if replacingFeatures.isEmpty, uniqueFeatures.isEmpty {
-            state = .didAnalyzeTestRun(didUpdateCorpus: false) // TODO: double check that
+            info.state = .didAnalyzeTestRun(didUpdateCorpus: false) // TODO: double check that
             return
         }
         
@@ -285,13 +203,15 @@ extension Fuzzer {
         
         if uniqueFeatures.isEmpty, let index = getUniqueUnitIndexToReplace() {
             // still have to check that the old unit does not contain features not included in the current unit
-            let oldUnitInfo = corpus.units[index.value]
+            let oldUnitInfo = info.corpus.units[index.value]
             if replacingFeatures.lazy.map({$0.0.key}) == oldUnitInfo.uniqueFeaturesSet {
-                corpus.replace(index, with: currentUnit)
+                let effect = info.corpus.replace(index, with: info.unit)
+                try! effect(&info.world)
+                
                 for (f, _) in replacingFeatures {
-                    corpus.unitInfoForFeature[f.key] = (currentUnitComplexity, index)
+                    info.corpus.unitInfoForFeature[f.key] = (currentUnitComplexity, index)
                 }
-                state = .didAnalyzeTestRun(didUpdateCorpus: true) // TODO: double check that
+                info.state = .didAnalyzeTestRun(didUpdateCorpus: true) // TODO: double check that
                 return
             }
         }
@@ -300,10 +220,10 @@ extension Fuzzer {
         let newCoverage = uniqueFeatures.reduce(0) { $0 + $1.coverage.importance.s }
         
         let coverageScore = Feature.Coverage.Score(replacedCoverage + newCoverage)
-        corpus.addedCoverageScore = Feature.Coverage.Score(newCoverage)
+        info.corpus.coverageScore.s += newCoverage
         
-        let newUnitInfo = Corpus.UnitInfo(
-            unit: currentUnit,
+        let newUnitInfo = Info.Corpus.UnitInfo(
+            unit: info.unit,
             coverageScore: coverageScore,
             mayDeleteFile: analysisKind.mayDeleteFile,
             reduced: false,
@@ -311,145 +231,97 @@ extension Fuzzer {
         )
         
         for (feature, oldUnitInfoIndex) in replacingFeatures {
-            corpus.units[oldUnitInfoIndex.value].coverageScore.s -= feature.coverage.importance.s
-            precondition(corpus.units[oldUnitInfoIndex.value].coverageScore >= 0)
-            if corpus.units[oldUnitInfoIndex.value].coverageScore == 0 {
-                corpus.deleteUnit(oldUnitInfoIndex)
+            info.corpus.units[oldUnitInfoIndex.value].coverageScore.s -= feature.coverage.importance.s
+            precondition(info.corpus.units[oldUnitInfoIndex.value].coverageScore >= 0)
+            if info.corpus.units[oldUnitInfoIndex.value].coverageScore == 0 {
+                let effect = info.corpus.deleteUnit(oldUnitInfoIndex)
+                try! effect(&info.world)
             }
-            corpus.unitInfoForFeature[feature.key] = (currentUnitComplexity, CorpusIndex(value: corpus.units.endIndex))
+            info.corpus.unitInfoForFeature[feature.key] = (currentUnitComplexity, CorpusIndex(value: info.corpus.units.endIndex))
         }
         for feature in uniqueFeatures {
-            corpus.unitInfoForFeature[feature.key] = (currentUnitComplexity, CorpusIndex(value: corpus.units.endIndex))
+            info.corpus.unitInfoForFeature[feature.key] = (currentUnitComplexity, CorpusIndex(value: info.corpus.units.endIndex))
         }
         
-        corpus.units.append(newUnitInfo)
-        corpus.updateCumulativeWeights()
-        state = .didAnalyzeTestRun(didUpdateCorpus: true)
+        info.corpus.units.append(newUnitInfo)
+        info.corpus.updateCumulativeWeights()
+        info.state = .didAnalyzeTestRun(didUpdateCorpus: true)
     }
    
     func mutateAndTestOne() {
-        guard case .willMutateAndTestOne = state else {
+        guard case .willMutateAndTestOne = info.state else {
             preconditionFailure()
         }
-        let idx = corpus.chooseUnitIdxToMutate(&coeffects.rand)
-        let unit = corpus.units[idx.value].unit ?? fuzzTarget.newUnit(&coeffects.rand) // TODO: is this correct?
-        currentUnit = unit
+        let idx = info.corpus.chooseUnitIdxToMutate(&info.world.rand)
+        let unit = info.corpus.units[idx.value].unit ?? fuzzTest.newUnit(&info.world.rand) // TODO: is this correct?
+        info.unit = unit
         
-        for _ in 0 ..< mutateDepth {
-            guard totalNumberOfRuns < maxNumberOfRuns else { break }
-            guard fuzzTarget.mutators.mutate(&currentUnit, &coeffects.rand) else { break }
-            
-            state = .willRunTest
+        for _ in 0 ..< info.settings.mutateDepth {
+            guard info.stats.totalNumberOfRuns < info.settings.maxNumberOfRuns else { break }
+            guard fuzzTest.mutators.mutate(&info.unit, &info.world.rand) else { break }
+            guard info.unit.complexity() < info.settings.maxUnitComplexity else { break }
+            info.state = .willRunTest
 
             runTest()
             
-            state = .willAnalyzeTestRun(.loopIteration(mutatingUnitIndex: idx))
+            info.state = .willAnalyzeTestRun(.loopIteration(mutatingUnitIndex: idx))
             analyzeTestRun()
 
-            guard case .didAnalyzeTestRun(let updatedCorpus) = state else { preconditionFailure() }
+            guard case .didAnalyzeTestRun(let updatedCorpus) = info.state else { preconditionFailure() }
             
             if updatedCorpus {
-                reportStatus(corpus.units[idx.value].reduced ? .reduce : .new)
-                Effect.writeToOutputCorpus(currentUnit)
+                let updateKind: FuzzerUpdateKind = info.corpus.units[idx.value].reduced ? .reduce : .new
+                info.world.reportEvent(.updatedCorpus(updateKind), stats: info.stats)
+                try! info.world.addToOutputCorpus(info.unit)
             }
         }
     }
 
     public func loop() {
-        reportStatus(.start)
+        info.processStartTime = info.world.clock()
+        info.world.reportEvent(.updatedCorpus(.start), stats: info.stats)
+        
         readAndExecuteCorpora()
-        reportStatus(.didReadCorpus)
+        info.world.reportEvent(.updatedCorpus(.didReadCorpus), stats: info.stats)
     
-        while totalNumberOfRuns < maxNumberOfRuns {
-            state = .willMutateAndTestOne
+        while info.stats.totalNumberOfRuns < info.settings.maxNumberOfRuns {
+            info.state = .willMutateAndTestOne
             mutateAndTestOne()
         }
-        state = .done
-        reportStatus(.done)
-    }
-    
-    func reportStatus(_ updateKind: UpdateKind) {
-        let now = coeffects.clock()
-        let seconds = Double(now - processStartTime) / 1_000_000
-
-        Effect.reportStats(
-            updateKind: updateKind,
-            totalNumberOfRuns: totalNumberOfRuns,
-            totalPCCoverage: ProgramCounterTracer.totalPCCoverage(),
-            score: corpus.addedCoverageScore,
-            corpusSize: corpus.numActiveUnits(),
-            execPerSec: (Double(totalNumberOfRuns) / seconds).rounded(),
-            rss: coeffects.peakRssMB()
-        )
+        info.state = .done
+        info.world.reportEvent(.updatedCorpus(.done), stats: info.stats)
     }
     
     func readAndExecuteCorpora() {
-        var units = [FT.baseUnit()]
-        //units += coeffects.readInputCorpus()
-        /*
-        let complexities = units.map { $0.complexity() }
-        let totalComplexity = complexities.reduce(0) { $0 + $1 }
-        let maxUnitComplexity = complexities.reduce(0.0) { max($0, $1) }
-        let minUnitComplexity = complexities.reduce(Double.greatestFiniteMagnitude) { min($0, $1) }
+        var units = [info.unit] + (try! info.world.readInputCorpus())
         
-        if maxUnitComplexity == 0 {
-            maxUnitComplexity = defaultMaxUnitComplexity
-        }
+        //let complexities = units.map { $0.complexity() }
+        // let totalComplexity = complexities.reduce(0.0 as Complexity) { Complexity($0.value + $1.value) }
+        //let maxUnitComplexity = complexities.reduce(0.0) { max($0, $1) }
+        // let minUnitComplexity = complexities.reduce(Complexity(Double.greatestFiniteMagnitude)) { min($0, $1) }
+        
+//        if maxUnitComplexity == 0.0 {
+//            self.maxUnitComplexity = defaultMaxUnitComplexity
+//        }
         // TODO: print
-        */
         
-        if shuffleAtStartup {
-            coeffects.rand.shuffle(&units)
+        if info.settings.shuffleAtStartup {
+            info.world.rand.shuffle(&units)
         }
         // TODO: prefer small
         
         for u in units {
             // TODO: max complexity
-            currentUnit = u
-            state = .willRunTest
+            info.unit = u
+            info.state = .willRunTest
             runTest()
-            state = .willAnalyzeTestRun(.readingCorpus)
+            info.state = .willAnalyzeTestRun(.readingCorpus)
             analyzeTestRun()
         }
-        state = .didReadCorpora
-    }
-    
-    func receive(signal: Coordinator.Signal) {
-        switch signal {
-        case .crash:
-            Effect.report(signal: signal)
-            // external func print stack trace
-            Effect.dumpUnit(prefix: "crash-", reason: .crash, unit: currentUnit)
-            self.reportStatus(.done)
-            exit(1)
-            
-        case .alarm:
-            precondition(timeout > 0)
-            guard case .runningTest = state else { return } // We have not started running units yet.
-            let microseconds = clock() - startTime
-            guard microseconds > timeout else { return }
-            Effect.report(signal: signal)
-            print(
-                """
-                Alarm: working on the last Unit for \(microseconds / 1000) milliseconds
-                and the timeout value is \(timeout / 1000) (use -timeout=N to change)
-                """)
-            Effect.dumpUnit(prefix: "timeout-", reason: .timeout, unit: currentUnit)
-            reportStatus(.done)
-            exit(1)
-            
-        case .fileSizeExceed:
-            Effect.report(signal: signal)
-            exit(1)
-            
-        case .interrupt:
-            Effect.report(signal: signal)
-            reportStatus(.done)
-            exit(0)
-        }
+        
+        info.state = .didReadCorpora
     }
 }
-
 
 
 

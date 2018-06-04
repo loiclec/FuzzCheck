@@ -41,15 +41,35 @@ extension Complexity: CustomStringConvertible {
 
 
 struct Feature {
-    struct Key {
-        var k: Int
+    private let lowerBits: UInt16 // all 16 bits are used, they are part of the key
+    private let upperBits: UInt16 // 5 bits are used for the key, and one bit for the coverage
+    
+    var key: Key {
+        return Key.init(k: (Int(upperBits & 0b11111) << 16) | Int(lowerBits))
     }
+    var coverage: Coverage {
+        if (upperBits & 0b100000) == 0b100000 {
+            return .valueProfile
+        } else {
+            return .pc
+        }
+    }
+    init(key: Key, coverage: Coverage) {
+        self.lowerBits = UInt16(key.k & 0xffff) // store the lower 16 bits of the key
+        // store the bit for the coverage at position 6 and the remaining 5 bits of the key
+        self.upperBits = UInt16(Int(coverage.rawValue << 6) | (key.k >> 16)) // this will fail if the key used more than 21 bits
+    }
+    
+    struct Key {
+        var k: Int // 21 bits
+    }
+    /*
     let key: Key
-    let coverage: Coverage
-
-    enum Coverage {
-        case pc
-        case valueProfile
+    let coverage: Coverage // 1 bit
+     */
+    enum Coverage: UInt8 {
+        case pc = 0
+        case valueProfile = 1
         //case newComparison
         //case redundantComparison
     }
@@ -129,10 +149,10 @@ extension UnsafeMutableBufferPointer where Element == (Complexity, CorpusIndex)?
     }
     subscript(idx: Feature.Key) -> (Complexity, CorpusIndex)? {
         get {
-            return self[idx.k % count]
+            return (self.baseAddress.unsafelyUnwrapped + idx.k).pointee// .pointee [idx.k/* % count*/]
         }
         set {
-            self[idx.k % count] = newValue
+            (self.baseAddress.unsafelyUnwrapped + idx.k).pointee = newValue//self[idx.k/* % count*/] = newValue
         }
     }
 }

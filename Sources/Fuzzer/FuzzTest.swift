@@ -4,19 +4,19 @@ public protocol FuzzUnit: Codable {
     func hash() -> Int
 }
 
-public typealias Mutator<Mutated> = (inout Mutated, inout Rand) -> Bool
-
 public protocol Mutators {
     associatedtype Mutated: FuzzUnit
+    associatedtype Mutator
     
-    func weightedMutators(for x: Mutated) -> [(Mutator<Mutated>, UInt64)]
+    func mutate(_ unit: inout Mutated, with mutator: Mutator, _ rand: inout Rand) -> Bool
+    
+    var weightedMutators: [(Mutator, UInt64)] { get }
 }
 extension Mutators {
     public func mutate(_ x: inout Mutated, _ r: inout Rand) -> Bool {
-        let mutators = weightedMutators(for: x)
-        for _ in 0 ..< mutators.count {
-            let mutator = r.weightedPick(from: mutators)
-            if mutator(&x, &r) { return true }
+        for _ in 0 ..< weightedMutators.count {
+            let mutator = r.weightedPick(fromSmall: weightedMutators)
+            if mutate(&x, with: mutator, &r) { return true }
         }
         return false
     }
@@ -29,7 +29,6 @@ public struct IntWrapper: FuzzUnit, CustomStringConvertible {
 
     public func complexity() -> Complexity {
         let c = self.x <= 0 ? Double.greatestFiniteMagnitude : (200.0 + (100.0 / Double(self.x))) 
-        // print(self.x, c)
         return Complexity(c)
     }
     
@@ -40,23 +39,26 @@ public struct IntWrapper: FuzzUnit, CustomStringConvertible {
     public var description: String { return x.description }
 }
 
-
 public struct IntWrapperMutators: Mutators {
     public typealias Mutated = IntWrapper
     
+    public enum Mutator {
+        case nudge
+    }
     
     public init() {}
-    
-    public func a(_ x: inout Mutated, _ r: inout Rand) -> Bool {
-        x.x = x.x &+ r.int(inside: -11 ..< 11)
-        return true
+
+    public func mutate(_ unit: inout IntWrapper, with mutator: IntWrapperMutators.Mutator, _ rand: inout Rand) -> Bool {
+        switch mutator {
+        case .nudge:
+            unit.x = unit.x &+ rand.int(inside: -11 ..< 11)
+            return true
+        }
     }
     
-    public func weightedMutators(for x: Mutated) -> [((inout Mutated, inout Rand) -> Bool, UInt64)] {
-        return [
-            (self.a, 1)
-        ]
-    }
+    public let weightedMutators: [(IntWrapperMutators.Mutator, UInt64)] = [
+        (.nudge, 1)
+    ]
 }
 
 extension FixedWidthInteger where Self: UnsignedInteger {
@@ -70,6 +72,23 @@ extension FixedWidthInteger where Self: UnsignedInteger {
 
 public struct UnsignedIntegerMutators <I: FixedWidthInteger & UnsignedInteger & FuzzUnit> : Mutators {
     public typealias Mutated = I
+    
+    public enum Mutator {
+        case nudge
+        case random
+        case special
+    }
+    
+    public func mutate(_ unit: inout I, with mutator: UnsignedIntegerMutators<I>.Mutator, _ rand: inout Rand) -> Bool {
+        switch mutator {
+        case .nudge:
+            return nudge(&unit, &rand)
+        case .random:
+            return random(&unit, &rand)
+        case .special:
+            return special(&unit, &rand)
+        }
+    }
     
     func nudge(_ x: inout Mutated, _ r: inout Rand) -> Bool {
         let nudge = r.integer(inside: (0 as I) ..< (10 as I))
@@ -91,13 +110,11 @@ public struct UnsignedIntegerMutators <I: FixedWidthInteger & UnsignedInteger & 
     
     public init() {}
     
-    public func weightedMutators(for x: Mutated) -> [((inout Mutated, inout Rand) -> Bool, UInt64)] {
-        return [
-            (self.special, 1),
-            (self.random, 11),
-            (self.nudge, 21),
-        ]
-    }
+    public let weightedMutators: [(Mutator, UInt64)] = [
+        (.special, 1),
+        (.random, 11),
+        (.nudge, 21),
+    ]
 }
 
 extension Array: FuzzUnit where Element: FuzzUnit {
@@ -121,8 +138,39 @@ public struct ArrayMutators <M: Mutators> : Mutators {
         self.elementMutators = elementMutators
     }
     
+    public enum Mutator {
+        case appendNew
+        case appendRecycled
+        case insertNew
+        case insertRecycled
+        case mutateElement
+        case swap
+        case removeLast
+        case removeRandom
+    }
+    
+    public func mutate(_ unit: inout Array<M.Mutated>, with mutator: ArrayMutators<M>.Mutator, _ rand: inout Rand) -> Bool {
+        switch mutator {
+        case .appendNew:
+            return appendNew(&unit, &rand)
+        case .appendRecycled:
+            return appendRecycled(&unit, &rand)
+        case .insertNew:
+            return insertNew(&unit, &rand)
+        case .insertRecycled:
+            return insertRecycled(&unit, &rand)
+        case .mutateElement:
+            return mutateElement(&unit, &rand)
+        case .swap:
+            return swap(&unit, &rand)
+        case .removeLast:
+            return removeLast(&unit, &rand)
+        case .removeRandom:
+            return removeRandom(&unit, &rand)
+        }
+    }
+    
     func appendNew(_ x: inout Mutated, _ r: inout Rand) -> Bool {
-        
         x.append(initializeElement(&r))
         return true
     }
@@ -259,17 +307,16 @@ public struct ArrayMutators <M: Mutators> : Mutators {
         return true
     }
     
-    public func weightedMutators(for x: Mutated) -> [(Mutator<Mutated>, UInt64)] {
-        
-        let haveRepeatingVariant: [(Mutator<Mutated>, UInt64)] = [
-            (self.appendNew, 40),
-            (self.appendRecycled, 80),
-            (self.insertNew, 120),
-            (self.insertRecycled, 160),
-            (self.mutateElement, 300),
-            (self.swap, 380),
-            (self.removeLast, 420),
-            (self.removeRandom, 460)
+    public let weightedMutators: [(Mutator, UInt64)] = {
+        let haveRepeatingVariant: [(Mutator, UInt64)] = [
+            (.appendNew, 40),
+            (.appendRecycled, 80),
+            (.insertNew, 120),
+            (.insertRecycled, 160),
+            (.mutateElement, 300),
+            (.swap, 380),
+            (.removeLast, 420),
+            (.removeRandom, 460)
         ]
         /*
         let repeatingVariants = haveRepeatingVariant.map { (m: (Mutator<Mutated>, UInt64)) -> (Mutator<Mutated>, UInt64) in
@@ -290,7 +337,7 @@ public struct ArrayMutators <M: Mutators> : Mutators {
         ]
         */
         return haveRepeatingVariant// + repeatingVariants// + others
-    }
+    }()
     
     static func repeatMutator(_ m: @escaping (inout Mutated, inout Rand) -> Bool, count: @escaping (inout Rand, Int) -> Int) -> (inout Mutated, inout Rand) -> Bool {
         return { (x: inout Mutated, r: inout Rand) -> Bool in

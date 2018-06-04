@@ -68,6 +68,47 @@ public struct GraphMutators <VM: Mutators> : Mutators where VM.Mutated: Hashable
         self.initializeVertex = initializeVertex
     }
     
+    public enum Mutator {
+        case addVertices
+        case addEdges
+        case copySubset
+        case splitEdge
+        case addFriend
+        case moveEdge
+        case addEdge
+        case removeEdge
+        case addVertex
+        case removeVertex
+        case modifyVertexData
+    }
+    
+    public func mutate(_ unit: inout Graph<VM.Mutated>, with mutator: GraphMutators<VM>.Mutator, _ rand: inout Rand) -> Bool {
+        switch mutator {
+        case .addVertices:
+            return addVertices(&unit, &rand)
+        case .addEdges:
+            return addEdges(&unit, &rand)
+        case .copySubset:
+            return copySubset(&unit, &rand)
+        case .splitEdge:
+            return splitEdge(&unit, &rand)
+        case .addFriend:
+            return addFriend(&unit, &rand)
+        case .moveEdge:
+            return moveEdge(&unit, &rand)
+        case .addEdge:
+            return addEdge(&unit, &rand)
+        case .removeEdge:
+            return removeEdge(&unit, &rand)
+        case .addVertex:
+            return addVertex(&unit, &rand)
+        case .removeVertex:
+            return removeVertex(&unit, &rand)
+        case .modifyVertexData:
+            return modifyVertexData(&unit, &rand)
+        }
+    }
+    
     func copySubset(_ x: inout Mutated, _ r: inout Rand) -> Bool {
         guard !x.isEmpty else { return false }
         var corresponding: [Int: Int] = [:]
@@ -182,21 +223,20 @@ public struct GraphMutators <VM: Mutators> : Mutators where VM.Mutated: Hashable
         return vertexMutators.mutate(&x.graph[i].data, &r)
     }
     
-    public func weightedMutators(for x: Mutated) -> [((inout Mutated, inout Rand) -> Bool, UInt64)] {
-        return [
-            (self.addVertices, 1),
-            (self.addEdges, 1),
-            (self.copySubset, 1),
-            (self.splitEdge, 11),
-            (self.addFriend, 16),
-            (self.moveEdge, 17),
-            (self.addEdge, 47),
-            (self.removeEdge, 57),
-            (self.addVertex, 67),
-            (self.removeVertex, 77),
-            (self.modifyVertexData, 97),
-        ]
-    }
+    public let weightedMutators: [(Mutator, UInt64)] = [
+        (.addVertices, 1),
+        (.addEdges, 1),
+        (.copySubset, 1),
+        (.splitEdge, 11),
+        (.addFriend, 16),
+        (.moveEdge, 17),
+        (.addEdge, 47),
+        (.removeEdge, 57),
+        (.addVertex, 67),
+        (.removeVertex, 77),
+        (.modifyVertexData, 97),
+    ]
+    
 }
 
 extension RandomAccessCollection where Self: MutableCollection, Self: RangeReplaceableCollection {

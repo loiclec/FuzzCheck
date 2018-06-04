@@ -57,14 +57,8 @@ final class TracePC {
         let buffer = UnsafeMutableBufferPointer(start: start, count: stop - start)
         for i in buffer.indices {
             numGuards += 1
-            if numGuards == TracePC.maxNumPCs {
-                print("""
-                WARNING: The binary has too many instrumented PCs.
-                         You may want to reduce the size of the binary
-                         for more efficient fuzzing and precise coverage data
-                """)
-            }
-            buffer[i] = UInt32(numGuards % TracePC.maxNumPCs)
+            precondition(numGuards < TracePC.maxNumPCs)
+            buffer[i] = UInt32(numGuards)
         }
         modules.append(buffer)
     }

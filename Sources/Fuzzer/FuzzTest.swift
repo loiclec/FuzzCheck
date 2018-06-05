@@ -15,7 +15,7 @@ public protocol Mutators {
 extension Mutators {
     public func mutate(_ x: inout Mutated, _ r: inout Rand) -> Bool {
         for _ in 0 ..< weightedMutators.count {
-            let mutator = r.weightedPick(fromSmall: weightedMutators)
+            let mutator = r.arrayWeightedPick(fromSmall: weightedMutators)
             if mutate(&x, with: mutator, &r) { return true }
         }
         return false

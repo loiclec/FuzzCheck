@@ -116,6 +116,30 @@ extension Rand {
         return c[weightedPickIndex(cumulativeWeights: c)].0
     }
     
+    // precondition: c is not empty
+    public mutating func arrayWeightedPick <T> (fromSmall c: [(T, UInt64)]) -> T {
+        precondition(!c.isEmpty)
+        // integer(inside: 0 ..< (smallCumulativeWeights.last!.1))
+        /*
+        let randWeight: UInt64 = uint64() % c[c.endIndex &- 1].1
+        for i in c.indices {
+            if c[i].1 >= randWeight { return c[i].0 }
+        }
+        fatalError()*/
+        
+        return c.withUnsafeBufferPointer { b in
+            var i = b.baseAddress.unsafelyUnwrapped
+            let randWeight: UInt64 = uint64() % (i + (b.count &- 1)).pointee.1
+            let last = i + b.count
+            while i < last {
+                if i.pointee.1 >= randWeight {
+                    return i.pointee.0
+                }
+                i = i + 1
+            }
+            fatalError()
+        }
+    }
     public mutating func weightedPick <T, C: RandomAccessCollection> (fromSmall c: C) -> T where C.Element == (T, UInt64), C.Index == Int {
         
         let randWeight: UInt64 = uint64() % c.last!.1// integer(inside: 0 ..< (smallCumulativeWeights.last!.1))

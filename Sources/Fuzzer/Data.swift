@@ -160,6 +160,37 @@ extension UnsafeMutableBufferPointer where Element == (Complexity, CorpusIndex)?
     }
 }
 
+extension Int {
+    func rounded(upToMultipleOf m: Int) -> Int {
+        return ((self + m) / m) * m
+    }
+}
 
+import os
+
+extension UnsafeMutableBufferPointer where Element == UInt8 {
+    // Must have a size that is a multiple of 8
+    func forEachNonZeroByte(_ f: (UInt8, Int) -> Void) {
+        //os_log("for each non-zero byte. size: %d", log: log, type: .debug, self.count)
+        let buffer = UnsafeMutableRawBufferPointer(self).bindMemory(to: UInt64.self)
+        //os_log("raw buffer of size %d", log: log, type: .debug, raw.count)
+        // let buffer = raw
+        //os_log("rebound! for i in 0 ..< %d", log: log, type: .debug, buffer.endIndex)
+        for i in 0 ..< buffer.endIndex {
+            let eightBytes = buffer[i]
+            guard eightBytes != 0 else { continue }
+            for j in 0 ..< 8 {
+                let j = 7 &- j
+                let w = UInt8((eightBytes >> (j &* 8)) & 0xff)
+                guard w != 0 else { continue }
+                f(w, i &* 8 &+ j)
+            }
+        }
+    }
+}
+
+struct EightBitCounters {
+    let buffer: UnsafeMutableBufferPointer<UInt8> = UnsafeMutableBufferPointer.allocate(capacity: TPC.numPCs() / 8)
+}
 
 

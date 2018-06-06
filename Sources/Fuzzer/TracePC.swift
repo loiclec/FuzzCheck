@@ -1,6 +1,10 @@
 
 import CBuiltinsNotAvailableInSwift
 import Darwin
+import os
+
+let log = OSLog.init(subsystem: "land.loic.fuzzcheck", category: "debugging")
+
 
 extension UnsafeMutableBufferPointer {
     static func allocateAndInitializeTo(_ x: Element, capacity: Int) -> UnsafeMutableBufferPointer {
@@ -11,7 +15,7 @@ extension UnsafeMutableBufferPointer {
 }
 
 var PCsSet: [PC: Int] = Dictionary(minimumCapacity: TPC.numPCs())
-var eightBitCounters = UnsafeMutableBufferPointer<UInt8>.allocateAndInitializeTo(0, capacity: TPC.numPCs())
+var eightBitCounters = UnsafeMutableBufferPointer<UInt8>.allocateAndInitializeTo(0, capacity: TPC.numPCs().rounded(upToMultipleOf: 8) )
 
 func counterToFeature <T: BinaryInteger> (_ counter: T) -> UInt32 {
     precondition(counter > 0)
@@ -44,6 +48,8 @@ final class TracePC {
     init() {}
     
     func numPCs() -> Int {
+        //precondition(log.isEnabled(type: .debug))
+        // os_log("get num pcs %d", log: log, type: .debug, numGuards+1)
         precondition(numGuards > 0 && numGuards < TracePC.maxNumPCs)
         return numGuards+1
     }
@@ -74,17 +80,25 @@ final class TracePC {
     
     func collectFeatures(_ handle: (Feature) -> Void) {
         // a feature is Comparable, and they are passed here in a deterministic, growing order. ref: #mxrvFXBpY9ij
-        let N = numPCs()
-        
+        //let N = numPCs()
+        // os_log("will collect features", log: log, type: .debug)
         var feature = Feature(key: 0, coverage: .pc)
         
+        eightBitCounters.forEachNonZeroByte { counter, i in
+            // os_log("eight bit counter. counter: %d i: %i", log: log, type: .debug, counter, i)
+            let counterFeatureOffset = counterToFeature(counter)
+            let f = feature &+ (UInt32(i) &* 8 &+ counterFeatureOffset)
+            precondition(f.coverage == .pc)
+            handle(f)
+            // os_log("did handle eight bit counter. counter: %d i: %i", log: log, type: .debug, counter, i)
+        }/*
         for i in 0 ..< N where eightBitCounters[i] != 0 { // TODO: iterate 64bits at a time
             let counterFeatureOffset = counterToFeature(eightBitCounters[i])
             let f = feature &+ (UInt32(i) &* 8 &+ counterFeatureOffset)
             precondition(f.coverage == .pc)
             handle(f)
         }
-        
+        */
         feature.coverage = .valueProfile
         feature.key = 0
         
@@ -95,6 +109,7 @@ final class TracePC {
                 handle(f)
             }
         }
+        // os_log("did collect features", log: log, type: .debug)
     }
     
     func handleCmp <T: BinaryInteger> (pc: Int, arg1: T, arg2: T) {

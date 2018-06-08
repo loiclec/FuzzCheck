@@ -146,7 +146,7 @@ typealias FeatureDictionary = UnsafeMutableBufferPointer<(Complexity, CorpusInde
 
 extension UnsafeMutableBufferPointer where Element == (Complexity, CorpusIndex)? {
     static func createEmpty() -> UnsafeMutableBufferPointer {
-        print("TPC numPCs:", TPC.numPCs())
+        print("TPC numPCs:", TracePC.numPCs())
                                                     // the size of the array is 2^(nbr of bits used by Feature)
         return UnsafeMutableBufferPointer.allocateAndInitializeTo(nil, capacity: 1 << 25)
     }
@@ -166,16 +166,10 @@ extension Int {
     }
 }
 
-import os
-
 extension UnsafeMutableBufferPointer where Element == UInt8 {
     // Must have a size that is a multiple of 8
     func forEachNonZeroByte(_ f: (UInt8, Int) -> Void) {
-        //os_log("for each non-zero byte. size: %d", log: log, type: .debug, self.count)
         let buffer = UnsafeMutableRawBufferPointer(self).bindMemory(to: UInt64.self)
-        //os_log("raw buffer of size %d", log: log, type: .debug, raw.count)
-        // let buffer = raw
-        //os_log("rebound! for i in 0 ..< %d", log: log, type: .debug, buffer.endIndex)
         for i in 0 ..< buffer.endIndex {
             let eightBytes = buffer[i]
             guard eightBytes != 0 else { continue }
@@ -188,9 +182,3 @@ extension UnsafeMutableBufferPointer where Element == UInt8 {
         }
     }
 }
-
-struct EightBitCounters {
-    let buffer: UnsafeMutableBufferPointer<UInt8> = UnsafeMutableBufferPointer.allocate(capacity: TPC.numPCs() / 8)
-}
-
-

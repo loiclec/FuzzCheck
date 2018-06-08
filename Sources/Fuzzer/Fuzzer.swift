@@ -54,7 +54,7 @@ public final class FuzzerInfo <T, World: FuzzerWorld> where World.Unit == T {
         let now = world.clock()
         let seconds = Double(now - processStartTime) / 1_000_000
         stats.executionsPerSecond = Int((Double(stats.totalNumberOfRuns) / seconds).rounded())
-        stats.totalPCCoverage = TPC.getTotalPCCoverage()
+        stats.totalPCCoverage = TracePC.getTotalPCCoverage()
         stats.score = corpus.coverageScore.s
     }
     
@@ -93,7 +93,7 @@ public final class Fuzzer <FT: FuzzTest, World: FuzzerWorld> where World.Unit ==
     public init(fuzzTest: FT, settings: FuzzerSettings, world: World) {
         print(MemoryLayout<Feature>.size, MemoryLayout<Feature>.stride)
         self.fuzzTest = fuzzTest
-        print(TPC.numPCs())
+        print(TracePC.numPCs())
         self.info = Info(unit: FT.baseUnit(), settings: settings, world: world)
     
         let signals: [Signal] = [.segmentationViolation, .busError, .abort, .illegalInstruction, .floatingPointException, .interrupt, .softwareTermination, .fileSizeLimitExceeded]
@@ -157,7 +157,7 @@ extension Fuzzer {
     func runTest() {
         guard case .willRunTest = info.state else { preconditionFailure() }
         
-        TPC.resetMaps()
+        TracePC.resetMaps()
         
         let startTime = info.world.clock()
         info.state = .runningTest(startTime: startTime)
@@ -178,7 +178,7 @@ extension Fuzzer {
         var uniqueFeatures: [Feature] = []
         var replacingFeatures: [(Feature, CorpusIndex)] = []
         
-        TPC.collectFeatures { feature in
+        TracePC.collectFeatures { feature in
             // a feature is Comparable, and they are passed here in growing order. see: #mxrvFXBpY9ij
             if let (oldComplexity, oldCorpusIndex) = info.corpus.unitInfoForFeature[feature] {
                 if currentUnitComplexity < oldComplexity {

@@ -55,6 +55,7 @@ public final class FuzzerInfo <T, World: FuzzerWorld> where World.Unit == T {
         let now = world.clock()
         let seconds = Double(now - processStartTime) / 1_000_000
         stats.executionsPerSecond = Int((Double(stats.totalNumberOfRuns) / seconds).rounded())
+        stats.corpusSize = corpus.numActiveUnits
         stats.totalPCCoverage = TracePC.getTotalPCCoverage()
         stats.score = corpus.coverageScore.s
     }
@@ -255,7 +256,7 @@ extension Fuzzer {
             info.corpus.unitInfoForFeature[feature] = (currentUnitComplexity, CorpusIndex(value: info.corpus.units.endIndex))
         }
         
-        info.corpus.units.append(newUnitInfo)
+        info.corpus.append(newUnitInfo)
         info.corpus.updateCumulativeWeights()
         info.state = .didAnalyzeTestRun(didUpdateCorpus: .new)
     }

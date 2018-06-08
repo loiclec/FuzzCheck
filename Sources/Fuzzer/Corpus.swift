@@ -34,10 +34,18 @@ extension FuzzerInfo {
             var mayDeleteFile: Bool
             var uniqueFeaturesSet: [Feature]
         }
+        var numActiveUnits = 0
         var units: [UnitInfo] = []
         var cumulativeWeights: [UInt64] = []
         var coverageScore: Feature.Coverage.Score = .init(0)
         var unitInfoForFeature = FeatureDictionary.createEmpty()
+    }
+}
+
+extension FuzzerInfo.Corpus {
+    func append(_ unitInfo: UnitInfo) {
+        self.units.append(unitInfo)
+        self.numActiveUnits += 1
     }
 }
 
@@ -70,17 +78,13 @@ extension FuzzerInfo.Corpus {
         let x = r.weightedPickIndex(cumulativeWeights: cumulativeWeights)
         return CorpusIndex(value: x)
     }
-    
-    func numActiveUnits() -> Int {
-        return units.reduce(0) { $0 + ($1.unit != nil ? 1 : 0) }
-    }
 
     func deleteUnit(_ idx: CorpusIndex) -> (inout World) throws -> Void {
         guard let oldUnit = units[idx.value].unit else {
             fatalError("Deleting a unit that doesn't exist")
         }
         units[idx.value].unit = nil
-        
+        numActiveUnits -= 1
         return { w in
             try w.removeFromOutputCorpus(oldUnit)
         }

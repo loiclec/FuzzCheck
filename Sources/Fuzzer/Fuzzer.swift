@@ -46,7 +46,7 @@ public final class FuzzerInfo <T, World: FuzzerWorld> where World.Unit == T {
         case runningTest(startTime: UInt)
         case didRunTest(timeTaken: UInt)
         case willAnalyzeTestRun(AnalysisKind)
-        case didAnalyzeTestRun(didUpdateCorpus: Bool)
+        case didAnalyzeTestRun(didUpdateCorpus: FuzzerUpdateKind?)
         case done
     }
     
@@ -199,7 +199,7 @@ extension Fuzzer {
         
         // #HGqvcfCLVhGr
         guard !(replacingFeatures.isEmpty && uniqueFeatures.isEmpty) else {
-            info.state = .didAnalyzeTestRun(didUpdateCorpus: false) // TODO: double check that
+            info.state = .didAnalyzeTestRun(didUpdateCorpus: nil) // TODO: double check that
             return
         }
   
@@ -209,7 +209,6 @@ extension Fuzzer {
             case let index = replacingFeatures[0].1,
             replacingFeatures.allSatisfy({ $0.1 == index })
         {
-            
             let oldUnitInfo = info.corpus.units[index.value]
             // still have to check that the old unit does not contain features not included in the current unit
             // only if they are completely equal can we replace the old unit by the new one
@@ -221,11 +220,13 @@ extension Fuzzer {
                 for (f, _) in replacingFeatures {
                     info.corpus.unitInfoForFeature[f] = (currentUnitComplexity, index)
                 }
-                info.state = .didAnalyzeTestRun(didUpdateCorpus: true) // TODO: double check that
+                info.state = .didAnalyzeTestRun(didUpdateCorpus: .reduce) // TODO: double check that
                 return
             }
             // else if the old unit had more features than the current unit,
             // then the current unit is not interesting at all and we ignore it
+            info.state = .didAnalyzeTestRun(didUpdateCorpus: nil)
+            return
         }
         
         let replacedCoverage = replacingFeatures.reduce(0) { $0 + $1.0.coverage.importance.s }
@@ -238,7 +239,6 @@ extension Fuzzer {
             unit: info.unit,
             coverageScore: coverageScore,
             mayDeleteFile: analysisKind.mayDeleteFile,
-            reduced: false,
             uniqueFeaturesSet: replacingFeatures.map { $0.0 } + uniqueFeatures
         )
         
@@ -257,7 +257,7 @@ extension Fuzzer {
         
         info.corpus.units.append(newUnitInfo)
         info.corpus.updateCumulativeWeights()
-        info.state = .didAnalyzeTestRun(didUpdateCorpus: true)
+        info.state = .didAnalyzeTestRun(didUpdateCorpus: .new)
     }
    
     func mutateAndTestOne() {
@@ -282,9 +282,8 @@ extension Fuzzer {
             
             guard case .didAnalyzeTestRun(let updatedCorpus) = info.state else { preconditionFailure() }
             
-            if updatedCorpus {
+            if let updateKind = updatedCorpus {
                 info.updatePeakMemoryUsage()
-                let updateKind: FuzzerUpdateKind = info.corpus.units[idx.value].reduced ? .reduce : .new
                 info.world.reportEvent(.updatedCorpus(updateKind), stats: info.stats)
                 try! info.world.addToOutputCorpus(info.unit)
             }

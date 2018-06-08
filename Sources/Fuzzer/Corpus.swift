@@ -32,7 +32,6 @@ extension FuzzerInfo {
             var unit: T?
             var coverageScore: Feature.Coverage.Score
             var mayDeleteFile: Bool
-            var reduced: Bool
             var uniqueFeaturesSet: [Feature]
         }
         var units: [UnitInfo] = []
@@ -57,7 +56,6 @@ extension FuzzerInfo.Corpus {
         
         let _oldUnit = oldUnitInfo.unit
         oldUnitInfo.unit = unit
-        oldUnitInfo.reduced = true
         
         units[unitIndex.value] = oldUnitInfo
         

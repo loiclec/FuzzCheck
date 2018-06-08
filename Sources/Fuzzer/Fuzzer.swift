@@ -51,6 +51,7 @@ public final class FuzzerInfo <T, World: FuzzerWorld> where World.Unit == T {
     }
     
     func updateStatsAfterRunAnalysis() {
+        guard case .didAnalyzeTestRun(_) = state else { preconditionFailure() }
         let now = world.clock()
         let seconds = Double(now - processStartTime) / 1_000_000
         stats.executionsPerSecond = Int((Double(stats.totalNumberOfRuns) / seconds).rounded())
@@ -91,9 +92,7 @@ public final class Fuzzer <FT: FuzzTest, World: FuzzerWorld> where World.Unit ==
     let signalsHandler: SignalsHandler
 
     public init(fuzzTest: FT, settings: FuzzerSettings, world: World) {
-        print(MemoryLayout<Feature>.size, MemoryLayout<Feature>.stride)
         self.fuzzTest = fuzzTest
-        print(TracePC.numPCs())
         self.info = Info(unit: FT.baseUnit(), settings: settings, world: world)
     
         let signals: [Signal] = [.segmentationViolation, .busError, .abort, .illegalInstruction, .floatingPointException, .interrupt, .softwareTermination, .fileSizeLimitExceeded]
@@ -161,13 +160,14 @@ extension Fuzzer {
         
         let startTime = info.world.clock()
         info.state = .runningTest(startTime: startTime)
-        
+        TracePC.recording = true
         _ = fuzzTest.run(info.unit)
-        
+        TracePC.recording = false
         info.state = .didRunTest(timeTaken: info.world.clock() - startTime)
 
         info.stats.totalNumberOfRuns += 1
     }
+
     func analyzeTestRun() {
         guard case .willAnalyzeTestRun(let analysisKind) = info.state else {
             preconditionFailure()
@@ -178,6 +178,9 @@ extension Fuzzer {
         var uniqueFeatures: [Feature] = []
         var replacingFeatures: [(Feature, CorpusIndex)] = []
         
+        //print("pc cov: \(TracePC.getTotalPCCoverage())")
+        //print("cov score: \(info.corpus.coverageScore)")
+        //Foundation.Thread.sleep(forTimeInterval: 0.5)
         TracePC.collectFeatures { feature in
             // a feature is Comparable, and they are passed here in growing order. see: #mxrvFXBpY9ij
             if let (oldComplexity, oldCorpusIndex) = info.corpus.unitInfoForFeature[feature] {
@@ -190,8 +193,9 @@ extension Fuzzer {
                 uniqueFeatures.append(feature)
             }
         }
-        
-        info.updateStatsAfterRunAnalysis()
+        //print("replacing features count: \(replacingFeatures.count)")
+        //print("unique features count: \(uniqueFeatures.count)")
+        //Foundation.Thread.sleep(forTimeInterval: 0.5)
         
         // #HGqvcfCLVhGr
         guard !(replacingFeatures.isEmpty && uniqueFeatures.isEmpty) else {
@@ -274,7 +278,8 @@ extension Fuzzer {
             
             info.state = .willAnalyzeTestRun(.loopIteration(mutatingUnitIndex: idx))
             analyzeTestRun()
-
+            info.updateStatsAfterRunAnalysis()
+            
             guard case .didAnalyzeTestRun(let updatedCorpus) = info.state else { preconditionFailure() }
             
             if updatedCorpus {

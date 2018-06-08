@@ -1,6 +1,7 @@
 
 import CBuiltinsNotAvailableInSwift
 import Darwin
+import Foundation
 
 extension UnsafeMutableBufferPointer {
     static func allocateAndInitializeTo(_ x: Element, capacity: Int) -> UnsafeMutableBufferPointer {
@@ -105,10 +106,15 @@ enum TracePC {
     }
     
     static func resetMaps() {
+        //print("RESET MAPS.")
+        //print("pc cov: \(TracePC.getTotalPCCoverage())")
+        //Foundation.Thread.sleep(forTimeInterval: 1)
         valueProfileMap.reset()
         modules.removeAll()
         UnsafeMutableBufferPointer(rebasing: eightBitCounters[..<numPCs()]).assign(repeating: 0)
     }
+    
+    static var recording = false
 }
 
 struct ValueBitMap {

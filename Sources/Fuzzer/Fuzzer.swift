@@ -130,8 +130,9 @@ public enum FuzzerStopReason: CustomStringConvertible {
     }
 }
 
-public enum FuzzerUpdateKind: CustomStringConvertible {
+public enum FuzzerUpdateKind: Equatable, CustomStringConvertible {
     case new
+    case replace(Int)
     case reduce
     case start
     case didReadCorpus
@@ -141,6 +142,8 @@ public enum FuzzerUpdateKind: CustomStringConvertible {
         switch self {
         case .new:
             return "NEW "
+        case .replace(let count):
+            return "REPLA \(count)"
         case .reduce:
             return "REDUCE"
         case .start:
@@ -243,10 +246,12 @@ extension Fuzzer {
             uniqueFeaturesSet: replacingFeatures.map { $0.0 } + uniqueFeatures
         )
         
+        var replacing = 0
         for (feature, oldUnitInfoIndex) in replacingFeatures {
             info.corpus.units[oldUnitInfoIndex.value].coverageScore.s -= feature.coverage.importance.s
             precondition(info.corpus.units[oldUnitInfoIndex.value].coverageScore >= 0)
             if info.corpus.units[oldUnitInfoIndex.value].coverageScore == 0 {
+                replacing += 1
                 let effect = info.corpus.deleteUnit(oldUnitInfoIndex)
                 try! effect(&info.world)
             }
@@ -258,7 +263,7 @@ extension Fuzzer {
         
         info.corpus.append(newUnitInfo)
         info.corpus.updateCumulativeWeights()
-        info.state = .didAnalyzeTestRun(didUpdateCorpus: .new)
+        info.state = .didAnalyzeTestRun(didUpdateCorpus: replacing == 0 ? .new : .replace(replacing))
     }
    
     func mutateAndTestOne() {

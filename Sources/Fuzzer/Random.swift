@@ -32,7 +32,7 @@ public struct Rand {
     }
     
     public mutating func uint16() -> UInt16 {
-        return UInt16(next31() & 0x00FF)
+        return UInt16(next31() & 0xFFFF)
     }
     
     public mutating func uint32() -> UInt32 {
@@ -68,16 +68,12 @@ extension Rand {
     public mutating func weightedPickIndex <W: RandomAccessCollection> (cumulativeWeights: W) -> W.Index where W.Element: FixedWidthInteger & UnsignedInteger {
        
         let randWeight: W.Element = integer(inside: 0 ..< (cumulativeWeights.last ?? 0))
-        
         switch cumulativeWeights.binarySearch(compare: { $0.compare(randWeight) }) {
         case .success(let i):
             return min(cumulativeWeights.index(before: cumulativeWeights.endIndex), cumulativeWeights.index(after: i))
         case .failure(_, let end):
             return min(cumulativeWeights.index(before: cumulativeWeights.endIndex), end)
         }
-        //let randWeight = (self.integer(inside: 0 ..< cumulativeWeights.last!)) + 1
-        //let i = cumulativeWeights.index(where: { $0 > randWeight })!
-        //return i
     }
     public mutating func weightedPickIndex <A, B, W: RandomAccessCollection> (cumulativeWeights: W) -> W.Index where W.Element == (A, B), B: FixedWidthInteger & UnsignedInteger {
         
@@ -89,26 +85,11 @@ extension Rand {
         case .failure(_, let end):
             return min(cumulativeWeights.index(before: cumulativeWeights.endIndex), end)
         }
-        //let randWeight = (self.integer(inside: 0 ..< cumulativeWeights.last!)) + 1
-        //let i = cumulativeWeights.index(where: { $0 > randWeight })!
-        //return i
     }
     
     public mutating func weightedPickIndex <A, B, W: RandomAccessCollection> (smallCumulativeWeights: W) -> W.Index where W.Element == (A, B), B: FixedWidthInteger & UnsignedInteger {
-        
         let randWeight: B = integer(inside: 0 ..< (smallCumulativeWeights.last?.1 ?? 0))
-        
         return smallCumulativeWeights.firstIndex(where: { $0.1 >= randWeight })!
-        /*
-        switch cumulativeWeights.binarySearch(compare: { $0.1.compare(randWeight) }) {
-        case .success(let i):
-            return min(cumulativeWeights.index(before: cumulativeWeights.endIndex), cumulativeWeights.index(after: i))
-        case .failure(_, let end):
-            return min(cumulativeWeights.index(before: cumulativeWeights.endIndex), end)
-        }*/
-        //let randWeight = (self.integer(inside: 0 ..< cumulativeWeights.last!)) + 1
-        //let i = cumulativeWeights.index(where: { $0 > randWeight })!
-        //return i
     }
     
     
@@ -119,14 +100,6 @@ extension Rand {
     // precondition: c is not empty
     public mutating func arrayWeightedPick <T> (fromSmall c: [(T, UInt64)]) -> T {
         precondition(!c.isEmpty)
-        // integer(inside: 0 ..< (smallCumulativeWeights.last!.1))
-        /*
-        let randWeight: UInt64 = uint64() % c[c.endIndex &- 1].1
-        for i in c.indices {
-            if c[i].1 >= randWeight { return c[i].0 }
-        }
-        fatalError()*/
-        
         return c.withUnsafeBufferPointer { b in
             var i = b.baseAddress.unsafelyUnwrapped
             let randWeight: UInt64 = uint64() % (i + (b.count &- 1)).pointee.1
@@ -140,33 +113,6 @@ extension Rand {
             fatalError()
         }
     }
-    public mutating func weightedPick <T, C: RandomAccessCollection> (fromSmall c: C) -> T where C.Element == (T, UInt64), C.Index == Int {
-        
-        let randWeight: UInt64 = uint64() % c.last!.1// integer(inside: 0 ..< (smallCumulativeWeights.last!.1))
-        
-        for (x, y) in c {
-            if y >= randWeight {
-                return x
-            }
-        }
-        fatalError()
-        //return c[weightedPickIndex(smallCumulativeWeights: c)].0
-    }
-    /*
-    public mutating func slice <C: RandomAccessCollection> (of c: C, maxLength: Int) -> C.SubSequence where C.Index == Int {
-        guard !c.isEmpty else { return c[c.startIndex ..< c.startIndex] }
-        let start = int(inside: c.startIndex ..< c.endIndex)
-        let end = 1 + int(inside: start ..< min(c.endIndex, start + maxLength))
-        precondition(start != end)
-        return c[start..<end]
-    }
-    public mutating func prefix <C: RandomAccessCollection> (of c: C, maxLength: Int) -> C.SubSequence where C.Index == Int {
-        let end = int(inside: c.startIndex ..< min(c.endIndex, c.startIndex + maxLength + 1))
-        return c[..<end]
-    }
-    public mutating func pick <T> (_ ts: T...) -> T {
-        return pick(from: ts)
-    }*/
 }
 
 extension Rand {

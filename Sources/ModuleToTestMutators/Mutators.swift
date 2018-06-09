@@ -27,8 +27,7 @@ struct Pair <A, B> : Codable where A: Codable, B: Codable {
 extension Graph: Codable where V: Codable {
     public init(from decoder: Decoder) throws {
         self.init()
-        var container = try decoder.unkeyedContainer()
-        let array = try container.decode(Array<Pair<V, [Int]>>.self)
+        let array = try Array<Pair<V, [Int]>>(from: decoder)
         for p in array {
             let vi = self.addVertex(p.a)
             for e in p.b {

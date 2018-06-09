@@ -257,4 +257,3 @@ extension RandomAccessCollection where Self: MutableCollection, Self: RangeRepla
         removeLast(distance(from: removeFrom, to: endIndex))
     }
 }
-

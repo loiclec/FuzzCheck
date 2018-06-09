@@ -148,7 +148,5 @@ extension FuzzerInfo where World == CommandLineFuzzerWorld<T> {
         worldBinder.bind(option: seed) { $0.rand = Rand(seed: UInt32($1)) }
         
         return (parser, settingsBinder, worldBinder)
-    }
-    
+    }    
 }
-

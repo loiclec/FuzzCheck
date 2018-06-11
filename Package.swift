@@ -17,7 +17,7 @@ let package = Package(
     targets: [
         .target(name: "CBuiltinsNotAvailableInSwift", dependencies: []),
         .target(name: "Fuzzer", dependencies: ["Files", "Utility", "CBuiltinsNotAvailableInSwift"]),
-        .target(name: "FuzzerJobsManager", dependencies: ["Fuzzer", "Utility"]),
+        .target(name: "FuzzerJobsManager", dependencies: ["Files", "Fuzzer", "Utility"]),
         .target(name: "ModuleToTest", dependencies: []),
         .target(name: "ModuleToTestMutators", dependencies: ["Fuzzer", "ModuleToTest"]),
         .target(name: "ToTest", dependencies: ["Fuzzer", "ModuleToTest", "ModuleToTestMutators", "Utility"]),

@@ -6,6 +6,7 @@
 //
 
 import Files
+import Foundation
 import Utility
 
 let usage = "[options]"
@@ -59,13 +60,30 @@ extension Folder: ArgumentKind {
         return ShellCompletion.filename
     }
 }
+extension File: ArgumentKind {
+    public convenience init(argument: String) throws {
+        try self.init(path: argument)
+    }
+    public static var completion: ShellCompletion {
+        return ShellCompletion.filename
+    }
+}
 
-extension FuzzerInfo where World == CommandLineFuzzerWorld<T> {
+extension Array: ArgumentKind where Element == ArtifactNameSchema.Atom {
+    public init(argument: String) throws {
+        self = ArtifactNameSchema.Atom.read(from: argument)
+    }
+    public static var completion: ShellCompletion {
+        return ShellCompletion.none
+    }
+}
 
-    public static func argumentsParser() -> (ArgumentParser, ArgumentBinder<FuzzerSettings>, ArgumentBinder<World>) {
+extension CommandLineFuzzerWorldInfo {
+    public static func argumentsParser() -> (ArgumentParser, ArgumentBinder<FuzzerSettings>, ArgumentBinder<CommandLineFuzzerWorldInfo>, ArgumentBinder<FuzzerManagerSettings>) {
         let parser = ArgumentParser(usage: usage, overview: overview)
         let settingsBinder = ArgumentBinder<FuzzerSettings>()
-        let worldBinder = ArgumentBinder<World>()
+        let worldBinder = ArgumentBinder<CommandLineFuzzerWorldInfo>()
+        let managerSettingsBinder = ArgumentBinder<FuzzerManagerSettings>()
         
         let maxNumberOfRuns = parser.add(
             option: "--max-number-of-runs",
@@ -111,23 +129,49 @@ extension FuzzerInfo where World == CommandLineFuzzerWorld<T> {
         )
         let inputCorpora = parser.add(
             option: "--input-folders",
-            shortName: "-if",
+            shortName: "-in-f",
             kind: Array<Folder>.self,
             usage: "List of folders containing JSON-encoded sample inputs to use as a starting point",
             completion: nil
         )
         let outputCorpus = parser.add(
             option: "--output-folder",
-            shortName: "-of",
+            shortName: "-out-f",
             kind: Folder.self,
             usage: "Folder in which to store the interesting inputs generated during the fuzzing process"
         )
         let artifactsFolder = parser.add(
             option: "--artifact-folder",
-            shortName: "-af",
+            shortName: "-art-f",
             kind: Folder.self,
             usage: "Folder in which to store the artifact generated at the end of the fuzzing process. Artifacts may be inputs that cause a crash, or inputs that took longer than <iteration-timeout> milliseconds to be tested"
         )
+        let artifactFileName = parser.add(
+            option: "--artifact-filename",
+            shortName: "-art-name",
+            kind: Array<ArtifactNameSchema.Atom>.self,
+            usage: "The name of the artifact"
+        )
+        let artifactFileExtension = parser.add(
+            option: "--artifact-file-extension",
+            shortName: "-art-ext",
+            kind: String.self,
+            usage: "The extension of the artifact"
+        )
+        let minimize = parser.add(
+            option: "--minimize",
+            shortName: nil,
+            kind: Bool.self,
+            usage: "If set, will run in minimize mode."
+        )
+        
+        let minimizeFile = parser.add(
+            option: "--minimize-file",
+            shortName: nil,
+            kind: File.self,
+            usage: "If set, will try to minimize the given crashing input."
+        )
+        
         let seed = parser.add(
             option: "--seed",
             shortName: nil,
@@ -135,18 +179,100 @@ extension FuzzerInfo where World == CommandLineFuzzerWorld<T> {
             usage: "Seed for the pseudo-random number generator"
         )
         
+        let target = parser.add(
+            option: "--target",
+            shortName: "-t",
+            kind: String.self,
+            usage: "The executable containing the fuzzer loop",
+            completion: nil
+        )
+        
         settingsBinder.bind(option: maxNumberOfRuns) { $0.maxNumberOfRuns = Int($1) }
         settingsBinder.bind(option: maxComplexity) { $0.maxUnitComplexity = Complexity($1) }
         settingsBinder.bind(option: mutationDepth) { $0.mutateDepth = Int($1) }
         settingsBinder.bind(option: shuffleAtStartup) { $0.shuffleAtStartup = $1 }
-        settingsBinder.bind(option: globalTimeout) { $0.globalTimeout = $1 }
         settingsBinder.bind(option: iterationTimeout) { $0.iterationTimeout = $1 }
+        settingsBinder.bind(option: minimize) { $0.minimize = $1 }
         
         worldBinder.bind(option: inputCorpora) { $0.inputCorpora = $1 }
         worldBinder.bind(option: outputCorpus) { $0.outputCorpus = $1 }
         worldBinder.bind(option: artifactsFolder) { $0.artifactsFolder = $1 }
+        worldBinder.bind(option: artifactFileName) { $0.artifactsNameSchema.atoms = $1 }
+        worldBinder.bind(option: artifactFileExtension) { $0.artifactsNameSchema.ext = $1 }
         worldBinder.bind(option: seed) { $0.rand = Rand(seed: UInt32($1)) }
         
-        return (parser, settingsBinder, worldBinder)
-    }    
+        managerSettingsBinder.bind(option: target) { $0.testExecutable = try getExecutableFile().parent!.file(named: $1) }
+        managerSettingsBinder.bind(option: minimizeFile) { $0.minimizeFile = $1 }
+        managerSettingsBinder.bind(option: globalTimeout) { $0.globalTimeout = $1 }
+        
+        return (parser, settingsBinder, worldBinder, managerSettingsBinder)
+    }
+}
+
+public struct FuzzerManagerSettings {
+    public var testExecutable: File? = nil
+    public var minimizeFile: File? = nil
+    public var globalTimeout: UInt? = nil
+    public init() { }
+}
+
+extension FuzzerManagerSettings {
+    public var commandLineArguments: [String] {
+        var args: [String] = []
+        if let exec = testExecutable { args += ["--target", exec.path] }
+        if let minFile = minimizeFile { args += ["--minimize-file", minFile.path] }
+        if let gtm = globalTimeout { args += ["--global-timeout", "\(gtm)"] }
+        return args
+    }
+}
+
+extension FuzzerSettings {
+    public var commandLineArguments: [String] {
+        var args: [String] = []
+        args += ["--max-complexity", "\(maxUnitComplexity)"]
+        if minimize { args.append("--minimize") }
+        args += ["--iteration-timeout", "\(iterationTimeout)"]
+        args += ["--max-number-of-runs", "\(maxNumberOfRuns)"]
+        args += ["--mutation-depth", "\(mutateDepth)"]
+        if shuffleAtStartup { args.append("--shuffle-input-corpus") }
+        return args
+    }
+}
+
+extension CommandLineFuzzerWorldInfo {
+    public var commandLineArguments: [String] {
+        var args: [String] = []
+        args += ["--seed", "\(rand.seed)"]
+        args += ["--artifact-folder", "\(artifactsFolder.path)"]
+        args += ["--artifact-filename", "\(artifactsNameSchema.atoms.map { $0.description }.joined())"]
+        if let ext = artifactsNameSchema.ext { args += ["--artifact-file-extension", "\(ext)"] }
+        if !inputCorpora.isEmpty {
+            args.append("--input-folders")
+            args += inputCorpora.map { $0.path }
+        }
+        if let out = outputCorpus { args += ["--output-folder", "\(out.path)"] }
+        return args
+    }
+}
+
+func getExecutableFile() throws -> File {
+    var cPath: UnsafeMutablePointer<Int8> = UnsafeMutablePointer.allocate(capacity: 1)
+    var size: UInt32 = 1
+    defer { cPath.deallocate() }
+    
+    Loop: while true {
+        let result = _NSGetExecutablePath(cPath, &size)
+        switch result {
+        case 0:
+            break Loop
+        case -1:
+            cPath.deallocate()
+            cPath = UnsafeMutablePointer.allocate(capacity: Int(size))
+        default:
+            fatalError("Failed to get an executable path to the current process.")
+        }
+    }
+    
+    let path = String(cString: cPath)
+    return try File(path: path)
 }

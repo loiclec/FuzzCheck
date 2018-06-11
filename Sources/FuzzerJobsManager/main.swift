@@ -1,90 +1,118 @@
 
+import Basic
+import Files
 import Foundation
 import Fuzzer
 import Utility
 
+typealias Process = Foundation.Process
 typealias URL = Foundation.URL
 
-let fuzzTestName = CommandLine.arguments[1]
+let lock = Lock()
 
-var fuzzerJobEnvironment = ProcessInfo.processInfo.environment
-fuzzerJobEnvironment["SWIFT_DETERMINISTIC_HASHING"] = "1"
-
-func getExecutablePath() -> URL {
-    var cPath: UnsafeMutablePointer<Int8> = UnsafeMutablePointer.allocate(capacity: 1)
-    var size: UInt32 = 1
-    defer { cPath.deallocate() }
+let (parser, workerSettingsBinder, worldBinder, settingsBinder) = CommandLineFuzzerWorldInfo.argumentsParser()
+do {
+    let res = try parser.parse(Array(CommandLine.arguments.dropFirst()))
+    var workerSettings: FuzzerSettings = FuzzerSettings()
+    try workerSettingsBinder.fill(parseResult: res, into: &workerSettings)
     
-    Loop: while true {
-        let result = _NSGetExecutablePath(cPath, &size)
-        switch result {
-        case 0:
-            break Loop
-        case -1:
-            cPath.deallocate()
-            cPath = UnsafeMutablePointer.allocate(capacity: Int(size))
-        default:
-            fatalError("Failed to get an executable path to the current process.")
+    var settings = FuzzerManagerSettings()
+    try settingsBinder.fill(parseResult: res, into: &settings)
+    guard let exec = settings.testExecutable else {
+        fatalError()
+    }
+    
+    var fuzzerJobEnvironment = ProcessInfo.processInfo.environment
+    fuzzerJobEnvironment["SWIFT_DETERMINISTIC_HASHING"] = "1"
+    var process = Process()
+    let launchPath = exec.path
+    let environment = fuzzerJobEnvironment
+    var arguments = Array(CommandLine.arguments.dropFirst())
+    
+    print(workerSettings)
+    
+    let signals: [Signal] = [.segmentationViolation, .busError, .abort, .illegalInstruction, .floatingPointException, .interrupt, .softwareTermination, .fileSizeLimitExceeded]
+    
+    let sh = SignalsHandler(signals: signals) { signal in
+        lock.withLock {
+            print("Received signal \(signal)")
+            if process.isRunning {
+                process.interrupt()
+                print("Sent interrupt signal to process \(process.processIdentifier) (\(process.launchPath!)")
+                // Give the child process a maximum of two seconds to shut down
+                sleep(2)
+                if process.isRunning { _ = process.suspend() }
+            }
+            exit(0)
         }
     }
     
-    let path = String(cString: cPath)
-    return URL (fileURLWithPath: path)
+    let timerSource = DispatchSource.makeTimerSource(flags: .strict, queue: DispatchQueue.global())
+    if let globalTimeout = settings.globalTimeout {
+        // set up timer
+        
+        let time: DispatchTime = DispatchTime.init(uptimeNanoseconds: DispatchTime.now().uptimeNanoseconds + UInt64(globalTimeout) * 1_000_000_000)
+        timerSource.schedule(deadline: time)
+        timerSource.setEventHandler {
+            if process.isRunning {
+                process.interrupt()
+                print("Process interrupted because of global timeout.")
+                sleep(2)
+                
+                if process.isRunning { _  = process.suspend() }
+            }
+            exit(0)
+        }
+        timerSource.activate()
+    }
+    
+    if let fileToMinimize = settings.minimizeFile {
+        var world = CommandLineFuzzerWorldInfo()
+        try worldBinder.fill(parseResult: res, into: &world)
+        
+        let inputFolder = try fileToMinimize.parent!.createSubfolderIfNeeded(withName: fileToMinimize.nameExcludingExtension + ".minimized")
+        try inputFolder.createFileIfNeeded(withName: fileToMinimize.name).write(data: fileToMinimize.read())
+        world.inputCorpora = [inputFolder]
+        world.artifactsFolder = inputFolder
+        //world.artifactsNameSchema.atoms = ArtifactNameSchema.Atom.read(from: "?complexity.?hash")
+        workerSettings.minimize = true
+        
+        arguments = workerSettings.commandLineArguments + world.commandLineArguments
+        while true {
+            do {
+                lock.withLock {
+                    process = Process()
+                }
+                process.launchPath = launchPath
+                process.environment = environment
+                process.arguments = arguments
+                try process.run()
+                process.waitUntilExit()
+            } catch let e {
+                print(e)
+                exit(1)
+            }
+        }
+        
+    } else {
+        do {
+            lock.withLock {
+                process = Process()
+            }
+            process.launchPath = launchPath
+            process.environment = environment
+            process.arguments = arguments
+            try process.run()
+            process.waitUntilExit()
+        } catch let e {
+            print(e)
+            exit(1)
+        }
+    }
+
+    withExtendedLifetime(sh) { }
+    withExtendedLifetime(timerSource) { }
+} catch let e {
+    print(e)
+    parser.printUsage(on: stdoutStream)
 }
-
-let selfExecutableURL = getExecutablePath()
-
-let workerExecutableURL = selfExecutableURL.deletingLastPathComponent().appendingPathComponent(fuzzTestName)
-
-let process = Process.init()
-process.launchPath = workerExecutableURL.path
-process.environment = fuzzerJobEnvironment
-
-process.launch()
-
-let pid = process.processIdentifier
-
-let source = DispatchSource.makeProcessSource(identifier: process.processIdentifier, eventMask: .exit)
-source.setEventHandler(handler: {
-    print("exit event received")
-    exit(1)
-})
-source.setRegistrationHandler(handler: {
-    print("source registered")
-})
-source.resume()
-
-/*
-let source3 = DispatchSource.makeTimerSource()
-source3.schedule(deadline: DispatchTime.distantFuture, repeating: DispatchTimeInterval.milliseconds(100), leeway: DispatchTimeInterval.milliseconds(10))
-
-source3.setEventHandler {
-    process.suspend()
-    print("process suspended for 2 seconds")
-    sleep(2)
-    print("process will start again")
-    process.resume()
-}
-source3.resume()
-*/
-
-let signals: [Signal] = [.segmentationViolation, .busError, .abort, .illegalInstruction, .floatingPointException, .interrupt, .softwareTermination, .fileSizeLimitExceeded]
-
-let sh = SignalsHandler(signals: signals) { signal in
-    print("Received signal \(signal)")
-
-    process.interrupt()
-    print("Sent interrupt signal to process \(process.processIdentifier) (\(process.launchPath!)")
-    // Give the child process a maximum of two seconds to shut down
-    sleep(2)
-    _ = process.suspend()
-    exit(1)
-}
-
-process.waitUntilExit()
-print("exited!")
-sleep(1000)
-
-withExtendedLifetime(sh) { }
-
-

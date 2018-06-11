@@ -68,33 +68,27 @@ extension Rand {
     public mutating func weightedPickIndex <W: RandomAccessCollection> (cumulativeWeights: W) -> W.Index where W.Element: FixedWidthInteger & UnsignedInteger {
        
         let randWeight: W.Element = integer(inside: 0 ..< (cumulativeWeights.last ?? 0))
+        var index: W.Index = cumulativeWeights.startIndex
         switch cumulativeWeights.binarySearch(compare: { $0.compare(randWeight) }) {
         case .success(let i):
-            return min(cumulativeWeights.index(before: cumulativeWeights.endIndex), cumulativeWeights.index(after: i))
+            index = min(cumulativeWeights.index(before: cumulativeWeights.endIndex), cumulativeWeights.index(after: i))
         case .failure(_, let end):
-            return min(cumulativeWeights.index(before: cumulativeWeights.endIndex), end)
+            index = min(cumulativeWeights.index(before: cumulativeWeights.endIndex), end)
         }
-    }
-    public mutating func weightedPickIndex <A, B, W: RandomAccessCollection> (cumulativeWeights: W) -> W.Index where W.Element == (A, B), B: FixedWidthInteger & UnsignedInteger {
-        
-        let randWeight: B = integer(inside: 0 ..< (cumulativeWeights.last?.1 ?? 0))
-        
-        switch cumulativeWeights.binarySearch(compare: { $0.1.compare(randWeight) }) {
-        case .success(let i):
-            return min(cumulativeWeights.index(before: cumulativeWeights.endIndex), cumulativeWeights.index(after: i))
-        case .failure(_, let end):
-            return min(cumulativeWeights.index(before: cumulativeWeights.endIndex), end)
+        while index > cumulativeWeights.startIndex {
+            let before = cumulativeWeights.index(before: index)
+            if cumulativeWeights[before] == cumulativeWeights[index] {
+                index = before
+            } else {
+                break
+            }
         }
+        return index
     }
-    
+ 
     public mutating func weightedPickIndex <A, B, W: RandomAccessCollection> (smallCumulativeWeights: W) -> W.Index where W.Element == (A, B), B: FixedWidthInteger & UnsignedInteger {
         let randWeight: B = integer(inside: 0 ..< (smallCumulativeWeights.last?.1 ?? 0))
         return smallCumulativeWeights.firstIndex(where: { $0.1 >= randWeight })!
-    }
-    
-    
-    public mutating func weightedPick <T, C: RandomAccessCollection> (from c: C) -> T where C.Element == (T, UInt64), C.Index == Int {
-        return c[weightedPickIndex(cumulativeWeights: c)].0
     }
     
     // precondition: c is not empty

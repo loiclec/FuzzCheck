@@ -99,7 +99,7 @@ extension Feature {
 
 extension Feature.Coverage {
 
-    struct Score {
+    struct Score: Hashable {
         var s: Int
         init(_ s: Int) { self.s = s }
     }

@@ -25,7 +25,7 @@ public final class FuzzerInfo <T, World: FuzzerWorld> where World.Unit == T {
     var unit: T
 
     var stats: FuzzerStats
-    let settings: FuzzerSettings
+    var settings: FuzzerSettings
     
     var processStartTime: UInt = 0
     var world: World
@@ -69,9 +69,6 @@ public final class FuzzerInfo <T, World: FuzzerWorld> where World.Unit == T {
         switch signal {
         case .illegalInstruction, .abort, .busError, .floatingPointException:
             try! world.saveArtifact(unit, because: .crash)
-            exit(1)
-            
-        case .fileSizeLimitExceeded:
             exit(1)
             
         case .interrupt:
@@ -182,9 +179,6 @@ extension Fuzzer {
         var uniqueFeatures: [Feature] = []
         var replacingFeatures: [(Feature, CorpusIndex)] = []
         
-        //print("pc cov: \(TracePC.getTotalPCCoverage())")
-        //print("cov score: \(info.corpus.coverageScore)")
-        //Foundation.Thread.sleep(forTimeInterval: 0.5)
         TracePC.collectFeatures { feature in
             // a feature is Comparable, and they are passed here in growing order. see: #mxrvFXBpY9ij
             if let (oldComplexity, oldCorpusIndex) = info.corpus.unitInfoForFeature[feature] {
@@ -197,10 +191,6 @@ extension Fuzzer {
                 uniqueFeatures.append(feature)
             }
         }
-        //print("replacing features count: \(replacingFeatures.count)")
-        //print("unique features count: \(uniqueFeatures.count)")
-        //Foundation.Thread.sleep(forTimeInterval: 0.5)
-        
         // #HGqvcfCLVhGr
         guard !(replacingFeatures.isEmpty && uniqueFeatures.isEmpty) else {
             info.state = .didAnalyzeTestRun(didUpdateCorpus: nil) // TODO: double check that
@@ -271,7 +261,14 @@ extension Fuzzer {
             preconditionFailure()
         }
         let idx = info.corpus.chooseUnitIdxToMutate(&info.world.rand)
-        let unit = info.corpus.units[idx.value].unit ?? fuzzTest.newUnit(&info.world.rand) // TODO: is this correct?
+
+        guard let unit = info.corpus.units[idx.value].unit else {
+            print(info.corpus.units.map { ($0.coverageScore, $0.unit != nil) })
+            print(info.corpus.cumulativeWeights)
+            print(idx)
+            sleep(10)
+            fatalError("This should never happen, but any bug in the fuzzer might lead to this situation.")
+        }
         info.unit = unit
         
         for _ in 0 ..< info.settings.mutateDepth {
@@ -279,7 +276,6 @@ extension Fuzzer {
             guard fuzzTest.mutators.mutate(&info.unit, &info.world.rand) else { break }
             guard info.unit.complexity() < info.settings.maxUnitComplexity else { break }
             info.state = .willRunTest
-
             runTest()
             
             info.state = .willAnalyzeTestRun(.loopIteration(mutatingUnitIndex: idx))
@@ -303,6 +299,39 @@ extension Fuzzer {
         readAndExecuteCorpora()
         info.world.reportEvent(.updatedCorpus(.didReadCorpus), stats: info.stats)
     
+        while info.stats.totalNumberOfRuns < info.settings.maxNumberOfRuns {
+            info.state = .willMutateAndTestOne
+            mutateAndTestOne()
+        }
+        info.state = .done
+        info.world.reportEvent(.updatedCorpus(.done), stats: info.stats)
+    }
+    
+    public func pickUnitFromInputCorpus() throws -> FT.Unit {
+        let units = try info.world.readInputCorpus()
+        precondition(!units.isEmpty)
+        
+        var complexities = units.map { ($0, $0.complexity()) }
+        /*
+        let totalComplexity = complexities.reduce(0.0 as Complexity) { Complexity($0.value + $1.value) }
+        let maxUnitComplexity = complexities.reduce(0.0) { max($0, $1) }
+        let minUnitComplexity = complexities.reduce(Complexity(Double.greatestFiniteMagnitude)) { min($0, $1) }
+        */
+        complexities.sort { $0.1 > $1.1 }
+        let weights = (0 ..< complexities.count).scan(UInt64(0)) { $0 + UInt64($1) }
+        let pick = info.world.rand.weightedPickIndex(cumulativeWeights: weights)
+        return units[pick]
+    }
+    
+    public func minimizeLoop() {
+        info.processStartTime = info.world.clock()
+        info.world.reportEvent(.updatedCorpus(.start), stats: info.stats)
+        
+        let input = try! pickUnitFromInputCorpus()
+        info.corpus.append(.init(unit: input, coverageScore: 1, mayDeleteFile: false, uniqueFeaturesSet: []))
+        info.corpus.updateCumulativeWeights()
+        info.settings.maxUnitComplexity = .init(input.complexity().value.nextDown)
+        info.world.reportEvent(.updatedCorpus(.didReadCorpus), stats: info.stats)
         while info.stats.totalNumberOfRuns < info.settings.maxNumberOfRuns {
             info.state = .willMutateAndTestOne
             mutateAndTestOne()

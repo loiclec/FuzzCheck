@@ -38,36 +38,44 @@ public struct FuzzerStats {
 }
 
 public struct FuzzerSettings {
-    public var globalTimeout: UInt
+    
     public var iterationTimeout: UInt
     public var maxNumberOfRuns: Int
     public var maxUnitComplexity: Complexity
     public var mutateDepth: Int
     public var shuffleAtStartup: Bool
-
+    public var minimize: Bool
     
-    public init(globalTimeout: UInt = UInt.max, iterationTimeout: UInt = UInt.max, maxNumberOfRuns: Int = Int.max, maxUnitComplexity: Complexity = 256.0, mutateDepth: Int = 3, shuffleAtStartup: Bool = true) {
-        self.globalTimeout = globalTimeout
+    public init(iterationTimeout: UInt = UInt.max, maxNumberOfRuns: Int = Int.max, maxUnitComplexity: Complexity = 256.0, mutateDepth: Int = 3, shuffleAtStartup: Bool = true, minimize: Bool = false) {
         self.iterationTimeout = iterationTimeout
         self.maxNumberOfRuns = maxNumberOfRuns
         self.maxUnitComplexity = maxUnitComplexity
         self.mutateDepth = mutateDepth
         self.shuffleAtStartup = shuffleAtStartup
+        self.minimize = minimize
     }
 }
 
+public struct CommandLineFuzzerWorldInfo {
+    public var rand: Rand = Rand(seed: arc4random())
+    public var inputCorpora: [Folder] = []
+    public var outputCorpus: Folder? = nil
+    public var outputCorpusNames: Set<String> = []
+    public var artifactsFolder: Folder = Folder.current
+    public var artifactsNameSchema: ArtifactNameSchema = ArtifactNameSchema(atoms: [.hash], ext: nil)
+    public init() {}
+}
+
 public struct CommandLineFuzzerWorld <Unit: FuzzUnit> : FuzzerWorld {
+
+    public var info: CommandLineFuzzerWorldInfo
+    public var rand: Rand {
+        get { return info.rand }
+        set { info.rand = newValue }
+    }
     
-    public var rand: Rand
-    public var inputCorpora: [Folder]
-    public var outputCorpus: Folder?
-    public var artifactsFolder: Folder
-    
-    public init(rand: Rand = Rand(seed: arc4random()), inputCorpora: [Folder] = [], outputCorpus: Folder? = nil, artifactsFolder: Folder = Folder.current) {
-        self.rand = rand
-        self.inputCorpora = inputCorpora
-        self.outputCorpus = outputCorpus
-        self.artifactsFolder = artifactsFolder
+    public init(info: CommandLineFuzzerWorldInfo) {
+        self.info = info
     }
     
     public func clock() -> UInt {
@@ -83,27 +91,43 @@ public struct CommandLineFuzzerWorld <Unit: FuzzUnit> : FuzzerWorld {
     
     public func saveArtifact(_ unit: Unit, because reason: FuzzerStopReason) throws {
         let encoder = JSONEncoder()
+        encoder.outputFormatting = .prettyPrinted
         let data = try encoder.encode(unit)
-        try artifactsFolder.createFileIfNeeded(withName: "\(reason.description)-\(hexString(unit.hash()))", contents: data)
+        let kind: ArtifactKind
+        switch reason {
+        case .crash  : kind = .crash
+        case .timeout: kind = .timeout
+        }
+        let nameInfo = ArtifactNameInfo(hash: unit.hash(), complexity: unit.complexity(), kind: kind)
+        let name = nameInfo.name(following: info.artifactsNameSchema).fillGapToBeUnique(from: readArtifactsFolderNames())
+        try info.artifactsFolder.createFileIfNeeded(withName: name, contents: data)
+    }
+    
+    public func readArtifactsFolderNames() -> Set<String> {
+        return Set(info.artifactsFolder.files.map { $0.name })
     }
     
     public func readInputCorpus() throws -> [Unit] {
         let decoder = JSONDecoder()
-        return try inputCorpora
+        return try info.inputCorpora
             .flatMap { $0.files }
             .map { try decoder.decode(Unit.self, from: $0.read()) }
     }
     
     public func removeFromOutputCorpus(_ unit: Unit) throws {
-        guard let outputCorpus = outputCorpus else { return }
+        guard let outputCorpus = info.outputCorpus else { return }
         try outputCorpus.file(named: hexString(unit.hash())).delete()
     }
     
-    public func addToOutputCorpus(_ unit: Unit) throws {
-        guard let outputCorpus = outputCorpus else { return }
+    public mutating func addToOutputCorpus(_ unit: Unit) throws {
+        guard let outputCorpus = info.outputCorpus else { return }
         let encoder = JSONEncoder()
+        encoder.outputFormatting = .prettyPrinted
         let data = try encoder.encode(unit)
-        try outputCorpus.createFileIfNeeded(withName: hexString(unit.hash()), contents: data)
+        let nameInfo = ArtifactNameInfo(hash: unit.hash(), complexity: unit.complexity(), kind: .unit)
+        let name = nameInfo.name(following: info.artifactsNameSchema).fillGapToBeUnique(from: info.outputCorpusNames)
+        info.outputCorpusNames.insert(name)
+        try outputCorpus.createFileIfNeeded(withName: name, contents: data)
     }
     
     public func reportEvent(_ event: FuzzerEvent, stats: FuzzerStats) {
@@ -114,8 +138,6 @@ public struct CommandLineFuzzerWorld <Unit: FuzzUnit> : FuzzerWorld {
             switch signal {
             case .illegalInstruction, .abort, .busError, .floatingPointException:
                 print("\n================ CRASH DETECTED ================")
-            case .fileSizeLimitExceeded:
-                print("\n================ FILE SIZE EXCEEDED ================")
             case .interrupt:
                 print("\n================ RUN INTERRUPTED ================")
             default:

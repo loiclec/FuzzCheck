@@ -46,16 +46,17 @@ struct FT : FuzzTest {
     }
     
     func run(_ g: Unit) {
-        //let comp = g.stronglyConnectedComponents()
-        //if comp.count > 3,
-        //    comp[0].count >= 3,
-        //    comp[1].count >= 3,
-        //    comp[2].count >= 3
-        //{
-        //    fatalError()
-        //}
-        //g.crashIfCyclic()
         
+        let comp = g.stronglyConnectedComponents()
+        if comp.count > 3,
+            comp[0].count >= 3,
+            comp[1].count >= 3,
+            comp[2].count >= 3
+        {
+            fatalError()
+        }
+        //g.crashIfCyclic()
+        /*
         if
             g.count == 10,
             g.graph[0].data == 0x64,
@@ -84,28 +85,34 @@ struct FT : FuzzTest {
             g.graph[4].edges[0] == 9,
             g.graph[5].edges.count == 0,
             g.graph[6].edges.count == 0,
-            g.graph[7].edges.count == 0
+            g.graph[7].edges.count == 0,
+            g.graph[8].edges.count == 0,
+            g.graph[9].edges.count == 0
         {
             fatalError()
-        }
+        }*/
     }
 }
 
 let graphMutators = GraphMutators(vertexMutators: UnsignedIntegerMutators<UInt8>(), initializeVertex: { r in r.byte() })
 
-let (parser, settingsBinder, worldBinder) = FuzzerInfo<Graph<UInt8>, CommandLineFuzzerWorld<Graph<UInt8>>>.argumentsParser()
+let (parser, settingsBinder, worldBinder, _) = CommandLineFuzzerWorldInfo.argumentsParser()
 do {
     let res = try parser.parse(Array(CommandLine.arguments.dropFirst()))
     var settings: FuzzerSettings = FuzzerSettings()
     try settingsBinder.fill(parseResult: res, into: &settings)
-    var world: CommandLineFuzzerWorld<Graph<UInt8>> = CommandLineFuzzerWorld()
+    var world: CommandLineFuzzerWorldInfo = CommandLineFuzzerWorldInfo()
     try worldBinder.fill(parseResult: res, into: &world)
     
     print(settings)
     print(world)
     
-    let fuzzer = Fuzzer(fuzzTest: FT(), settings: settings, world: world)
-    fuzzer.loop()
+    let fuzzer = Fuzzer(fuzzTest: FT(), settings: settings, world: CommandLineFuzzerWorld(info: world))
+    if settings.minimize {
+        fuzzer.minimizeLoop()
+    } else {
+        fuzzer.loop()
+    }
 } catch let e {
     print(e)
     parser.printUsage(on: stdoutStream)

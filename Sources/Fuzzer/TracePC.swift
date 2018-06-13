@@ -11,7 +11,7 @@ extension UnsafeMutableBufferPointer {
     }
 }
 
-var PCsSet: [PC: Int] = Dictionary(minimumCapacity: TracePC.numPCs())
+var PCs = UnsafeMutableBufferPointer<UInt>.allocateAndInitializeTo(0, capacity: TracePC.numPCs().rounded(upToMultipleOf: 8))
 var eightBitCounters = UnsafeMutableBufferPointer<UInt8>.allocateAndInitializeTo(0, capacity: TracePC.numPCs().rounded(upToMultipleOf: 8) )
 
 func counterToFeature <T: BinaryInteger> (_ counter: T) -> UInt32 {
@@ -35,7 +35,6 @@ enum TracePC {
     static let tracePCBits: Int = 18
     
     static var numGuards: Int = 0
-    static var modules: [UnsafeMutableBufferPointer<UInt32>] = []
     
     static var valueProfileMap: ValueBitMap = .init()
     
@@ -43,26 +42,24 @@ enum TracePC {
     static var useValueProfile: Bool = true
     
     static func numPCs() -> Int {
-        //precondition(log.isEnabled(type: .debug))
-        // os_log("get num pcs %d", log: log, type: .debug, numGuards+1)
         precondition(numGuards > 0 && numGuards < TracePC.maxNumPCs)
         return numGuards+1
     }
-    
+
     static func handleInit(start: UnsafeMutablePointer<UInt32>, stop: UnsafeMutablePointer<UInt32>) {
         guard start != stop && start.pointee == 0 else { return }
-    
+        
         let buffer = UnsafeMutableBufferPointer(start: start, count: stop - start)
         for i in buffer.indices {
             numGuards += 1
             precondition(numGuards < TracePC.maxNumPCs)
             buffer[i] = UInt32(numGuards)
         }
-        modules.append(buffer)
     }
 
-    static func handleCallerCallee(caller: Int, callee: Int) {
-        let (caller, callee) = (UInt(caller), UInt(callee))
+    
+    static func handleCallerCallee(caller: NormalizedPC, callee: NormalizedPC) {
+        let (caller, callee) = (caller.value, callee.value)
         let bits: UInt = 12
         let mask = (1 << bits) - 1
         let idx: UInt = (caller & mask) | ((callee & mask) << bits)
@@ -70,7 +67,7 @@ enum TracePC {
     }
     
     static func getTotalPCCoverage() -> Int {
-        return PCsSet.count
+        return PCs.reduce(0) { $0 + ($1 != 0 ? 1 : 0) }
     }
     
     static func collectFeatures(_ handle: (Feature) -> Void) {
@@ -96,8 +93,8 @@ enum TracePC {
         }
     }
     
-    static func handleCmp <T: BinaryInteger> (pc: Int, arg1: T, arg2: T) {
-        let pc = PC(pc)
+    static func handleCmp <T: BinaryInteger> (pc: NormalizedPC, arg1: T, arg2: T) {
+        let pc = pc.value
         let argxor = arg1 ^ arg2
         let argdist = UInt(__popcountll(UInt64(argxor)) + 1)
 
@@ -106,11 +103,7 @@ enum TracePC {
     }
     
     static func resetMaps() {
-        //print("RESET MAPS.")
-        //print("pc cov: \(TracePC.getTotalPCCoverage())")
-        //Foundation.Thread.sleep(forTimeInterval: 1)
         valueProfileMap.reset()
-        modules.removeAll()
         UnsafeMutableBufferPointer(rebasing: eightBitCounters[..<numPCs()]).assign(repeating: 0)
     }
     

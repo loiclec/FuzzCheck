@@ -69,9 +69,22 @@ extension File: ArgumentKind {
     }
 }
 
-extension Array: ArgumentKind where Element == ArtifactNameSchema.Atom {
+extension Array: ArgumentKind where Element == ArtifactSchema.Name.Atom {
     public init(argument: String) throws {
-        self = ArtifactNameSchema.Atom.read(from: argument)
+        self = ArtifactSchema.Name.Atom.read(from: argument)
+    }
+    public static var completion: ShellCompletion {
+        return ShellCompletion.none
+    }
+}
+
+extension ArtifactSchema.Content: ArgumentKind {
+    public init(argument: String) throws {
+        self.init(features: argument.contains("features"),
+                  coverageScore: argument.contains("coverage"),
+                  hash: argument.contains("hash"),
+                  complexity: argument.contains("complexity"),
+                  kind: argument.contains("kind"))
     }
     public static var completion: ShellCompletion {
         return ShellCompletion.none
@@ -149,7 +162,7 @@ extension CommandLineFuzzerWorldInfo {
         let artifactFileName = parser.add(
             option: "--artifact-filename",
             shortName: "-art-name",
-            kind: Array<ArtifactNameSchema.Atom>.self,
+            kind: Array<ArtifactSchema.Name.Atom>.self,
             usage: "The name of the artifact"
         )
         let artifactFileExtension = parser.add(

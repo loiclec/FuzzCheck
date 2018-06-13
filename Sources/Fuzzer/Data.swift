@@ -5,7 +5,7 @@
 //  Created by Loïc Lecrenier on 27/05/2018.
 //
 
-public struct Complexity {
+public struct Complexity: Codable {
     public var value: Double
 }
 extension Complexity {
@@ -40,7 +40,7 @@ extension Complexity: CustomStringConvertible {
 }
 
 
-struct Feature: Equatable {
+public struct Feature: Equatable, Hashable {
     static let keyLengthInBits = 24
     
     static let keyMask: UInt32      = 0x00_ffffff // 24 lower bits
@@ -85,7 +85,7 @@ struct Feature: Equatable {
         self.bits = (key & Feature.keyMask) | (UInt32(coverage.rawValue) << Feature.keyLengthInBits)
     }
     
-    enum Coverage: UInt8 {
+    public enum Coverage: UInt8 {
         case pc = 0
         case valueProfile = 1
     }
@@ -97,11 +97,56 @@ extension Feature {
     }
 }
 
+extension Feature.Coverage: Codable {
+    
+    public func encode(to encoder: Encoder) throws {
+        switch self {
+        case .pc:
+            try "pc".encode(to: encoder)
+        case .valueProfile:
+            try "value-profile".encode(to: encoder)
+        }
+    }
+    public init(from decoder: Decoder) throws {
+        let s = try String.init(from: decoder)
+        switch s {
+        case "pc":
+            self = .pc
+        case "value-profile":
+            self = .valueProfile
+        default:
+            throw DecodingError.valueNotFound(Feature.Coverage.self, DecodingError.Context(codingPath: [], debugDescription: "Expected to find either “pc” or “value-profile”"))
+        }
+    }
+}
+
+extension Feature: Codable {
+    
+    enum CodingKey: Swift.CodingKey {
+        case kind
+        case key
+    }
+    
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKey.self)
+        try container.encode(coverage, forKey: .kind)
+        try container.encode(key, forKey: .key)
+    }
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKey.self)
+        let coverage = try container.decode(Coverage.self, forKey: .kind)
+        let key =  try container.decode(UInt32.self, forKey: .key)
+        self.init(bits: 0)
+        self.coverage = coverage
+        self.key = key
+    }
+}
+
 extension Feature.Coverage {
 
-    struct Score: Hashable {
-        var s: Int
-        init(_ s: Int) { self.s = s }
+    public struct Score: Hashable, Codable {
+        var value: Int
+        init(_ s: Int) { self.value = s }
     }
 
     var importance: Score {
@@ -114,32 +159,39 @@ extension Feature.Coverage {
     }
 }
 extension Feature.Coverage.Score: ExpressibleByIntegerLiteral {
-    init(integerLiteral value: Int) {
-        self.s = value
+    public init(integerLiteral value: Int) {
+        self.value = value
     }
 }
+
+extension Feature.Coverage.Score {
+    static func + (lhs: Feature.Coverage.Score, rhs: Feature.Coverage.Score) -> Feature.Coverage.Score {
+        return Feature.Coverage.Score(lhs.value + rhs.value)
+    }
+}
+
 extension Feature.Coverage.Score: Comparable {
-    static func < (lhs: Feature.Coverage.Score, rhs: Feature.Coverage.Score) -> Bool {
-        return lhs.s < rhs.s
+    public static func < (lhs: Feature.Coverage.Score, rhs: Feature.Coverage.Score) -> Bool {
+        return lhs.value < rhs.value
     }
-    static func <= (lhs: Feature.Coverage.Score, rhs: Feature.Coverage.Score) -> Bool {
-        return lhs.s <= rhs.s
+    public static func <= (lhs: Feature.Coverage.Score, rhs: Feature.Coverage.Score) -> Bool {
+        return lhs.value <= rhs.value
     }
-    static func > (lhs: Feature.Coverage.Score, rhs: Feature.Coverage.Score) -> Bool {
-        return lhs.s > rhs.s
+    public static func > (lhs: Feature.Coverage.Score, rhs: Feature.Coverage.Score) -> Bool {
+        return lhs.value > rhs.value
     }
-    static func >= (lhs: Feature.Coverage.Score, rhs: Feature.Coverage.Score) -> Bool {
-        return lhs.s >= rhs.s
+    public static func >= (lhs: Feature.Coverage.Score, rhs: Feature.Coverage.Score) -> Bool {
+        return lhs.value >= rhs.value
     }
-    static func == (lhs: Feature.Coverage.Score, rhs: Feature.Coverage.Score) -> Bool {
-        return lhs.s == rhs.s
+    public static func == (lhs: Feature.Coverage.Score, rhs: Feature.Coverage.Score) -> Bool {
+        return lhs.value == rhs.value
     }
-    static func != (lhs: Feature.Coverage.Score, rhs: Feature.Coverage.Score) -> Bool {
-        return lhs.s != rhs.s
+    public static func != (lhs: Feature.Coverage.Score, rhs: Feature.Coverage.Score) -> Bool {
+        return lhs.value != rhs.value
     }
 }
 extension Feature.Coverage.Score: CustomStringConvertible {
-    var description: String { return s.description }
+    public var description: String { return value.description }
 }
 
 typealias FeatureDictionary = UnsafeMutableBufferPointer<(Complexity, CorpusIndex)?>

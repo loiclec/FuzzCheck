@@ -20,7 +20,7 @@ public protocol FuzzerWorld {
     mutating func clock() -> UInt
     mutating func readInputCorpus() throws -> [Unit]
     
-    mutating func saveArtifact(_ artifact: Unit, because reason: FuzzerStopReason) throws
+    mutating func saveArtifact(unit: Unit, features: [Feature]?, coverage: Feature.Coverage.Score?, complexity: Complexity?, hash: Int?, kind: ArtifactKind) throws
     mutating func addToOutputCorpus(_ unit: Unit) throws
     mutating func removeFromOutputCorpus(_ unit: Unit) throws
     mutating func reportEvent(_ event: FuzzerEvent, stats: FuzzerStats)
@@ -62,7 +62,8 @@ public struct CommandLineFuzzerWorldInfo {
     public var outputCorpus: Folder? = nil
     public var outputCorpusNames: Set<String> = []
     public var artifactsFolder: Folder = Folder.current
-    public var artifactsNameSchema: ArtifactNameSchema = ArtifactNameSchema(atoms: [.hash], ext: nil)
+    public var artifactsNameSchema: ArtifactSchema.Name = ArtifactSchema.Name(atoms: [.hash], ext: nil)
+    public var artifactsContentSchema: ArtifactSchema.Content = ArtifactSchema.Content(features: true, coverageScore: true, hash: false, complexity: false, kind: false)
     public init() {}
 }
 
@@ -79,7 +80,7 @@ public struct CommandLineFuzzerWorld <Unit: FuzzUnit> : FuzzerWorld {
     }
     
     public func clock() -> UInt {
-        return UInt(DispatchTime.now().rawValue / 1_000)// Darwin.clock()
+        return UInt(DispatchTime.now().rawValue / 1_000)
     }
     public func getPeakMemoryUsage() -> UInt {
         var r: rusage = rusage.init()
@@ -89,17 +90,13 @@ public struct CommandLineFuzzerWorld <Unit: FuzzUnit> : FuzzerWorld {
         return UInt(r.ru_maxrss) >> 20
     }
     
-    public func saveArtifact(_ unit: Unit, because reason: FuzzerStopReason) throws {
+    public func saveArtifact(unit: Unit, features: [Feature]?, coverage: Feature.Coverage.Score?, complexity: Complexity?, hash: Int?, kind: ArtifactKind) throws {
+        let content = Artifact.Content.init(schema: info.artifactsContentSchema, unit: unit, features: features, coverage: coverage, hash: hash, complexity: complexity, kind: kind)
         let encoder = JSONEncoder()
         encoder.outputFormatting = .prettyPrinted
-        let data = try encoder.encode(unit)
-        let kind: ArtifactKind
-        switch reason {
-        case .crash  : kind = .crash
-        case .timeout: kind = .timeout
-        }
+        let data = try encoder.encode(content)
         let nameInfo = ArtifactNameInfo(hash: unit.hash(), complexity: unit.complexity(), kind: kind)
-        let name = nameInfo.name(following: info.artifactsNameSchema).fillGapToBeUnique(from: readArtifactsFolderNames())
+        let name = ArtifactNameWithoutIndex(schema: info.artifactsNameSchema, info: nameInfo).fillGapToBeUnique(from: readArtifactsFolderNames())
         try info.artifactsFolder.createFileIfNeeded(withName: name, contents: data)
     }
     
@@ -125,7 +122,7 @@ public struct CommandLineFuzzerWorld <Unit: FuzzUnit> : FuzzerWorld {
         encoder.outputFormatting = .prettyPrinted
         let data = try encoder.encode(unit)
         let nameInfo = ArtifactNameInfo(hash: unit.hash(), complexity: unit.complexity(), kind: .unit)
-        let name = nameInfo.name(following: info.artifactsNameSchema).fillGapToBeUnique(from: info.outputCorpusNames)
+        let name = ArtifactNameWithoutIndex(schema: info.artifactsNameSchema, info: nameInfo).fillGapToBeUnique(from: [])
         info.outputCorpusNames.insert(name)
         try outputCorpus.createFileIfNeeded(withName: name, contents: data)
     }

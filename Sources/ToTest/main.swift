@@ -46,7 +46,7 @@ struct FT : FuzzTest {
     }
     
     func run(_ g: Unit) {
-        
+        /*
         let comp = g.stronglyConnectedComponents()
         if comp.count > 3,
             comp[0].count >= 3,
@@ -55,6 +55,7 @@ struct FT : FuzzTest {
         {
             fatalError()
         }
+         */
         //g.crashIfCyclic()
         /*
         if
@@ -90,7 +91,30 @@ struct FT : FuzzTest {
             g.graph[9].edges.count == 0
         {
             fatalError()
-        }*/
+        }
+        */
+        if
+            g.count == 6,
+            g.graph[0].data == 0x64,
+            g.graph[1].data == 0x65,
+            g.graph[2].data == 0x61,
+            g.graph[3].data == 0x64,
+            g.graph[4].data == 0x62,
+            g.graph[5].data == 0x65,
+            g.graph[0].edges.count == 2,
+            g.graph[0].edges[0] == 1,
+            g.graph[0].edges[1] == 2,
+            g.graph[1].edges.count == 2,
+            g.graph[1].edges[0] == 3,
+            g.graph[1].edges[1] == 4,
+            g.graph[2].edges.count == 1,
+            g.graph[2].edges[0] == 5,
+            g.graph[3].edges.count == 0,
+            g.graph[4].edges.count == 0,
+            g.graph[5].edges.count == 0
+        {
+            fatalError()
+        }
     }
 }
 

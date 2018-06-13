@@ -74,7 +74,7 @@ do {
         try inputFolder.createFileIfNeeded(withName: fileToMinimize.name).write(data: fileToMinimize.read())
         world.inputCorpora = [inputFolder]
         world.artifactsFolder = inputFolder
-        //world.artifactsNameSchema.atoms = ArtifactNameSchema.Atom.read(from: "?complexity.?hash")
+        //world.artifactsNameSchema.atoms = ArtifactSchema.Name.Atom.read(from: "?complexity.?hash")
         workerSettings.minimize = true
         
         arguments = workerSettings.commandLineArguments + world.commandLineArguments

@@ -57,7 +57,7 @@ public final class FuzzerInfo <T, World: FuzzerWorld> where World.Unit == T {
         stats.executionsPerSecond = Int((Double(stats.totalNumberOfRuns) / seconds).rounded())
         stats.corpusSize = corpus.numActiveUnits
         stats.totalPCCoverage = TracePC.getTotalPCCoverage()
-        stats.score = corpus.coverageScore.s
+        stats.score = corpus.coverageScore.value
     }
     
     func updatePeakMemoryUsage() {
@@ -68,7 +68,9 @@ public final class FuzzerInfo <T, World: FuzzerWorld> where World.Unit == T {
         world.reportEvent(.caughtSignal(signal), stats: stats)
         switch signal {
         case .illegalInstruction, .abort, .busError, .floatingPointException:
-            try! world.saveArtifact(unit, because: .crash)
+            var features: [Feature] = []
+            TracePC.collectFeatures { features.append($0) }
+            try! world.saveArtifact(unit: unit, features: features, coverage: nil, complexity: nil, hash: nil, kind: .crash)
             exit(1)
             
         case .interrupt:
@@ -104,15 +106,6 @@ public final class Fuzzer <FT: FuzzTest, World: FuzzerWorld> where World.Unit ==
 enum AnalysisKind: Equatable {
     case readingCorpus
     case loopIteration(mutatingUnitIndex: CorpusIndex)
-    
-    var mayDeleteFile: Bool {
-        switch self {
-        case .readingCorpus:
-            return false
-        case .loopIteration(_):
-            return true
-        }
-    }
 }
 
 public enum FuzzerStopReason: CustomStringConvertible {
@@ -203,7 +196,7 @@ extension Fuzzer {
             case let index = replacingFeatures[0].1,
             replacingFeatures.allSatisfy({ $0.1 == index })
         {
-            let oldUnitInfo = info.corpus.units[index.value]
+            let oldUnitInfo = info.corpus[index]
             // still have to check that the old unit does not contain features not included in the current unit
             // only if they are completely equal can we replace the old unit by the new one
             // we can compare them in that way because both collections are sorted, see: #mxrvFXBpY9ij
@@ -223,32 +216,31 @@ extension Fuzzer {
             return
         }
         
-        let replacedCoverage = replacingFeatures.reduce(0) { $0 + $1.0.coverage.importance.s }
-        let newCoverage = uniqueFeatures.reduce(0) { $0 + $1.coverage.importance.s }
+        let replacedCoverage = replacingFeatures.reduce(0) { $0 + $1.0.coverage.importance.value }
+        let newCoverage = uniqueFeatures.reduce(0) { $0 + $1.coverage.importance.value }
         
         let coverageScore = Feature.Coverage.Score(replacedCoverage + newCoverage)
-        info.corpus.coverageScore.s += newCoverage
+        info.corpus.coverageScore.value += newCoverage
         
         let newUnitInfo = Info.Corpus.UnitInfo(
             unit: info.unit,
             coverageScore: coverageScore,
-            mayDeleteFile: analysisKind.mayDeleteFile,
             uniqueFeaturesSet: replacingFeatures.map { $0.0 } + uniqueFeatures
         )
         
         var replacing = 0
         for (feature, oldUnitInfoIndex) in replacingFeatures {
-            info.corpus.units[oldUnitInfoIndex.value].coverageScore.s -= feature.coverage.importance.s
-            precondition(info.corpus.units[oldUnitInfoIndex.value].coverageScore >= 0)
-            if info.corpus.units[oldUnitInfoIndex.value].coverageScore == 0 {
+            info.corpus[oldUnitInfoIndex].coverageScore.value -= feature.coverage.importance.value
+            precondition(info.corpus[oldUnitInfoIndex].coverageScore >= 0)
+            if info.corpus[oldUnitInfoIndex].coverageScore == 0 {
                 replacing += 1
                 let effect = info.corpus.deleteUnit(oldUnitInfoIndex)
                 try! effect(&info.world)
             }
-            info.corpus.unitInfoForFeature[feature] = (currentUnitComplexity, CorpusIndex(value: info.corpus.units.endIndex))
+            info.corpus.unitInfoForFeature[feature] = (currentUnitComplexity, .normal(info.corpus.units.endIndex))
         }
         for feature in uniqueFeatures {
-            info.corpus.unitInfoForFeature[feature] = (currentUnitComplexity, CorpusIndex(value: info.corpus.units.endIndex))
+            info.corpus.unitInfoForFeature[feature] = (currentUnitComplexity, .normal(info.corpus.units.endIndex))
         }
         
         info.corpus.append(newUnitInfo)
@@ -262,7 +254,7 @@ extension Fuzzer {
         }
         let idx = info.corpus.chooseUnitIdxToMutate(&info.world.rand)
 
-        guard let unit = info.corpus.units[idx.value].unit else {
+        guard let unit = info.corpus[idx].unit else {
             print(info.corpus.units.map { ($0.coverageScore, $0.unit != nil) })
             print(info.corpus.cumulativeWeights)
             print(idx)
@@ -328,7 +320,7 @@ extension Fuzzer {
         info.world.reportEvent(.updatedCorpus(.start), stats: info.stats)
         
         let input = try! pickUnitFromInputCorpus()
-        info.corpus.append(.init(unit: input, coverageScore: 1, mayDeleteFile: false, uniqueFeaturesSet: []))
+        info.corpus.units.append(.init(unit: input, coverageScore: 1, uniqueFeaturesSet: []))
         info.corpus.updateCumulativeWeights()
         info.settings.maxUnitComplexity = .init(input.complexity().value.nextDown)
         info.world.reportEvent(.updatedCorpus(.didReadCorpus), stats: info.stats)

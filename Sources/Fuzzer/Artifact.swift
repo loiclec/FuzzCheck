@@ -15,7 +15,7 @@ public struct Artifact <Unit: Codable> {
         let unit: Unit
         
         let features: [Feature]?
-        let coverageScore: Feature.Coverage.Score?
+        let coverageScore: Double?
         let hash: Int?
         let complexity: Complexity?
         let kind: ArtifactKind?
@@ -57,7 +57,7 @@ public struct ArtifactSchema {
 }
 
 extension Artifact.Content {
-    init(schema: ArtifactSchema.Content, unit: Unit, features: [Feature]?, coverage: Feature.Coverage.Score?, hash: Int?, complexity: Complexity?, kind: ArtifactKind) {
+    init(schema: ArtifactSchema.Content, unit: Unit, features: [Feature]?, coverage: Double?, hash: Int?, complexity: Complexity?, kind: ArtifactKind) {
         self.unit = unit
         self.features = schema.features ? features : nil
         self.coverageScore = schema.coverageScore ? coverage : nil
@@ -213,7 +213,7 @@ extension Artifact.Content: Codable {
             let container = try decoder.container(keyedBy: CodingKey.self)
             self.unit = try container.decode(Unit.self, forKey: .unit)
             self.complexity = try container.decodeIfPresent(Complexity.self, forKey: .complexity)
-            self.coverageScore = try container.decodeIfPresent(Feature.Coverage.Score.self, forKey: .coverage)
+            self.coverageScore = try container.decodeIfPresent(Double.self, forKey: .coverage)
             self.hash = try container.decodeIfPresent(Int.self, forKey: .hash)
             self.features = try container.decodeIfPresent(Array<Feature>.self, forKey: .features)
             self.kind = try container.decodeIfPresent(ArtifactKind.self, forKey: .kind)

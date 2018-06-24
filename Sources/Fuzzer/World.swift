@@ -20,10 +20,12 @@ public protocol FuzzerWorld {
     mutating func clock() -> UInt
     mutating func readInputCorpus() throws -> [Unit]
     
-    mutating func saveArtifact(unit: Unit, features: [Feature]?, coverage: Feature.Coverage.Score?, complexity: Complexity?, hash: Int?, kind: ArtifactKind) throws
+    mutating func saveArtifact(unit: Unit, features: [Feature]?, coverage: Double?, complexity: Complexity?, hash: Int?, kind: ArtifactKind) throws
     mutating func addToOutputCorpus(_ unit: Unit) throws
     mutating func removeFromOutputCorpus(_ unit: Unit) throws
     mutating func reportEvent(_ event: FuzzerEvent, stats: FuzzerStats)
+    
+    mutating func readInputCorpusWithFeatures() throws -> [(Unit, [Feature])]
     
     var rand: Rand { get set }
 }
@@ -90,13 +92,14 @@ public struct CommandLineFuzzerWorld <Unit: FuzzUnit> : FuzzerWorld {
         return UInt(r.ru_maxrss) >> 20
     }
     
-    public func saveArtifact(unit: Unit, features: [Feature]?, coverage: Feature.Coverage.Score?, complexity: Complexity?, hash: Int?, kind: ArtifactKind) throws {
+    public func saveArtifact(unit: Unit, features: [Feature]?, coverage: Double?, complexity: Complexity?, hash: Int?, kind: ArtifactKind) throws {
         let content = Artifact.Content.init(schema: info.artifactsContentSchema, unit: unit, features: features, coverage: coverage, hash: hash, complexity: complexity, kind: kind)
         let encoder = JSONEncoder()
         encoder.outputFormatting = .prettyPrinted
         let data = try encoder.encode(content)
         let nameInfo = ArtifactNameInfo(hash: unit.hash(), complexity: unit.complexity(), kind: kind)
         let name = ArtifactNameWithoutIndex(schema: info.artifactsNameSchema, info: nameInfo).fillGapToBeUnique(from: readArtifactsFolderNames())
+        print("Saving crash at \(info.artifactsFolder.path)\(name)")
         try info.artifactsFolder.createFileIfNeeded(withName: name, contents: data)
     }
     
@@ -109,6 +112,25 @@ public struct CommandLineFuzzerWorld <Unit: FuzzUnit> : FuzzerWorld {
         return try info.inputCorpora
             .flatMap { $0.files }
             .map { try decoder.decode(Unit.self, from: $0.read()) }
+    }
+    
+    public mutating func readInputCorpusWithFeatures() throws -> [(Unit, [Feature])] {
+        let decoder = JSONDecoder()
+
+        let artifacts = info.inputCorpora
+            .flatMap { $0.files }
+            .map { file -> Artifact<Unit>.Content in
+                do {
+                    return try decoder.decode(Artifact<Unit>.Content.self, from: file.read())
+                } catch let e {
+                    print(e)
+                    sleep(4)
+                    fatalError()
+                }
+            }
+        return artifacts.map { c in
+            (c.unit, c.features!)
+        }
     }
     
     public func removeFromOutputCorpus(_ unit: Unit) throws {

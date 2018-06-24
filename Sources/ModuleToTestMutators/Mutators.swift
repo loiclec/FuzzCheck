@@ -223,18 +223,24 @@ public struct GraphMutators <VM: Mutators> : Mutators where VM.Mutated: Hashable
     
     public let weightedMutators: [(Mutator, UInt64)] = [
         (.addVertices, 1),
-        (.addEdges, 1),
-        (.copySubset, 1),
+        (.addEdges, 2),
+        (.copySubset, 3),
         (.splitEdge, 11),
         (.addFriend, 16),
-        (.moveEdge, 17),
-        (.addEdge, 47),
-        (.removeEdge, 57),
-        (.addVertex, 67),
-        (.removeVertex, 77),
-        (.modifyVertexData, 97),
+        (.moveEdge, 47),
+        (.addEdge, 77),
+        (.removeEdge, 87),
+        (.addVertex, 97),
+        (.removeVertex, 107),
+        (.modifyVertexData, 157),
     ]
     
+}
+
+public var x = 0
+
+public func noop() {
+    x += 1
 }
 
 extension RandomAccessCollection where Self: MutableCollection, Self: RangeReplaceableCollection {

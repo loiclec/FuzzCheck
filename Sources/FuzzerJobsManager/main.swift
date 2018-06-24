@@ -51,7 +51,7 @@ do {
     if let globalTimeout = settings.globalTimeout {
         // set up timer
         
-        let time: DispatchTime = DispatchTime.init(uptimeNanoseconds: DispatchTime.now().uptimeNanoseconds + UInt64(globalTimeout) * 1_000_000_000)
+        let time: DispatchTime = DispatchTime(uptimeNanoseconds: DispatchTime.now().uptimeNanoseconds + UInt64(globalTimeout) * 1_000_000_000)
         timerSource.schedule(deadline: time)
         timerSource.setEventHandler {
             if process.isRunning {

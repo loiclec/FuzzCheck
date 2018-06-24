@@ -40,22 +40,22 @@ struct FT : FuzzTest {
         var g = Graph<UInt8>()
         //var g = Graph<Nothing>()
         for _ in 0 ..< r.positiveInt(10) {
-            _ = graphMutators.mutate(&g, &r)
+            _ = mutators.mutate(&g, &r)
         }
         return g
     }
     
     func run(_ g: Unit) {
-        /*
+        
         let comp = g.stronglyConnectedComponents()
-        if comp.count > 3,
-            comp[0].count >= 3,
-            comp[1].count >= 3,
-            comp[2].count >= 3
+        if comp.count >= 3,
+            comp[0].count >= 2,
+            comp[1].count >= 2,
+            comp[2].count >= 2
         {
             fatalError()
         }
-         */
+ 
         //g.crashIfCyclic()
         /*
         if
@@ -93,8 +93,8 @@ struct FT : FuzzTest {
             fatalError()
         }
         */
-        if
-            g.count == 6,
+        /*
+        if g.count == 6,
             g.graph[0].data == 0x64,
             g.graph[1].data == 0x65,
             g.graph[2].data == 0x61,
@@ -113,8 +113,38 @@ struct FT : FuzzTest {
             g.graph[4].edges.count == 0,
             g.graph[5].edges.count == 0
         {
-            fatalError()
+            fatalError("You found the crash!")
         }
+        */
+        
+        /*
+        if g.count == 6 {
+            var x = 0
+
+            if g.graph[0].data == 0x64 { x += 1 }
+            if g.graph[1].data == 0x65 { x += 1 }
+            if g.graph[2].data == 0x61 { x += 1 }
+            if g.graph[3].data == 0x64 { x += 1 }
+            if g.graph[4].data == 0x62 { x += 1 }
+            if g.graph[5].data == 0x65 { x += 1 }
+            if g.graph[0].edges.count == 2 {
+                if g.graph[0].edges[0] == 1 { x += 1 }
+                if g.graph[0].edges[1] == 2 { x += 1 }
+            }
+            if g.graph[1].edges.count == 2 {
+                if g.graph[1].edges[0] == 3 { x += 1 }
+                if g.graph[1].edges[1] == 4 { x += 1 }
+            }
+            if g.graph[2].edges.count == 1 {
+                if g.graph[2].edges[0] == 5 { x += 1 }
+            }
+            if g.graph[3].edges.count == 0 { x += 1 }
+            if g.graph[4].edges.count == 0 { x += 1 }
+            if g.graph[5].edges.count == 0 { x += 1 }
+            if x >= 8 {
+                fatalError("You found the crash!")
+            }
+        }*/
     }
 }
 
@@ -128,13 +158,11 @@ do {
     var world: CommandLineFuzzerWorldInfo = CommandLineFuzzerWorldInfo()
     try worldBinder.fill(parseResult: res, into: &world)
     
-    print(settings)
-    print(world)
-    
     let fuzzer = Fuzzer(fuzzTest: FT(), settings: settings, world: CommandLineFuzzerWorld(info: world))
     if settings.minimize {
         fuzzer.minimizeLoop()
     } else {
+        //fuzzer.determinismLoop()
         fuzzer.loop()
     }
 } catch let e {

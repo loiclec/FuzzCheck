@@ -91,7 +91,7 @@ extension Feature {
         }
         init(pc: UInt, arg1: UInt64, arg2: UInt64) {
             self.pc = pc
-            self.argxordist = UInt64((arg1 &- arg2).nonzeroBitCount)
+            self.argxordist = UInt64(counterToFeature((arg1 &- arg2).nonzeroBitCount + 1))
         }
     }
     public struct GEP: Equatable, Hashable {
@@ -124,6 +124,7 @@ extension Feature {
     }
 }
 
+
 extension Feature.Indirect: Comparable {
     public static func < (lhs: Feature.Indirect, rhs: Feature.Indirect) -> Bool {
         if lhs.caller < rhs.caller {
@@ -142,14 +143,6 @@ extension Feature.ValueProfile: Comparable {
             return true
         } else if lhs.pc == rhs.pc {
             return lhs.argxordist < rhs.argxordist
-            /*
-            if lhs.arg1 < rhs.arg1 {
-                return true
-            } else if lhs.arg1 == rhs.arg1  {
-                return lhs.arg2 < rhs.arg2
-            } else {
-                return false
-            }*/
         } else {
             return false
         }

@@ -123,7 +123,11 @@ extension Array: FuzzUnit where Element: FuzzUnit {
     }
     
     public func hash() -> Int {
-        return self.reduce(1.hashValue) { ($0 &* 65371) ^ $1.hash() }
+        var hasher = Hasher()
+        for x in self {
+            hasher.combine(x.hash())
+        }
+        return hasher.finalize()
     }
 }
 

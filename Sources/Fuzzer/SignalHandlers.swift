@@ -34,13 +34,7 @@ public final class SignalsHandler {
             signalSemaphore.signal()
         }
         var action = sigaction()
-        #if os(macOS)
         action.__sigaction_u.__sa_handler = signalHandler
-        #else
-        action.__sigaction_handler = unsafeBitCast(
-            signalHandler,
-            to: sigaction.__Unnamed_union___sigaction_handler.self)
-        #endif
         for signal in signals {
             // Install the new handler.
             let result = sigaction(signal.rawValue, &action, &oldActions[Int(signal.rawValue)])

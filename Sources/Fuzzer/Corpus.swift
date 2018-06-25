@@ -41,7 +41,6 @@ extension FuzzerInfo {
         var cumulativeWeights: [UInt64] = []
         var coverageScore: Double = 0
         var allFeatures: [Feature: (Int, Complexity, CorpusIndex)] = [:]
-        var forbiddenPCGroups: Set<PC> = []
     }
 }
 
@@ -61,35 +60,6 @@ extension FuzzerInfo.Corpus {
         }
     }
 }
-/*
-struct LazyAppendSequence <S1: Sequence, S2: Sequence> : Sequence where S1.Element == S2.Element {
-   typealias Element = S1.Element
-    
-    let (s1, s2): (S1, S2)
-    
-    func makeIterator() -> Iterator {
-        return Iterator(i1: s1.makeIterator(), i2: s2.makeIterator(), idx: true)
-    }
-    
-    struct Iterator: IteratorProtocol {
-        var (i1, i2): (S1.Iterator, S2.Iterator)
-        var idx: Bool = true
-        
-        mutating func next() -> Element? {
-            if idx, let n = i1.next() {
-                return n
-            } else {
-                idx = false
-                return i2.next()
-            }
-        }
-    }
-}
-
-func | <S1, S2> (lhs: S1, rhs: S2) -> LazyAppendSequence<S1, S2> {
-    return LazyAppendSequence(s1: lhs, s2: rhs)
-}
-*/
 
 extension FuzzerInfo.Corpus {
     func append(_ unitInfo: UnitInfo) {
@@ -98,6 +68,7 @@ extension FuzzerInfo.Corpus {
         for f in unitInfo.initiallyUniqueFeatures {
             // FIXME: this can definitely happen
             if allFeatures[f] != nil {
+                print(f)
                 print("error: allFeatures[f] != nil")
                 preconditionFailure()
             }
@@ -144,7 +115,7 @@ extension FuzzerInfo.Corpus {
         }
         cumulativeWeights = units.enumerated().scan(0, { (weight, next) in
             let (_, unit) = next
-            return weight + UInt64(unit.coverageScore)// * (UInt64(offset) + 1) // before, I used to prefer newer units, but I am not sure it is a good idea
+            return weight + UInt64(unit.coverageScore)
         })
     }
     

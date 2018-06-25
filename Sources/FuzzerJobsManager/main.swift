@@ -66,19 +66,71 @@ do {
         timerSource.activate()
     }
     
-    if let fileToMinimize = settings.minimizeFile {
-        var world = CommandLineFuzzerWorldInfo()
-        try worldBinder.fill(parseResult: res, into: &world)
+    var world = CommandLineFuzzerWorldInfo()
+    try worldBinder.fill(parseResult: res, into: &world)
+
+    if case .minimize = workerSettings.command, let fileToMinimize = world.inputFile {
         
         let inputFolder = try fileToMinimize.parent!.createSubfolderIfNeeded(withName: fileToMinimize.nameExcludingExtension + ".minimized")
-        try inputFolder.createFileIfNeeded(withName: fileToMinimize.name).write(data: fileToMinimize.read())
-        world.inputCorpora = [inputFolder]
-        world.artifactsFolder = inputFolder
-        //world.artifactsNameSchema.atoms = ArtifactSchema.Name.Atom.read(from: "?complexity.?hash")
-        workerSettings.minimize = true
+        let data = try fileToMinimize.read()
+        try inputFolder.createFileIfNeeded(withName: fileToMinimize.name, contents: data)
         
-        arguments = workerSettings.commandLineArguments + world.commandLineArguments
+        world.artifactsFolder = inputFolder
+        world.inputFile = fileToMinimize
+        world.artifactsContentSchema = .init(features: false, coverageScore: false, hash: false, complexity: true, kind: false)
+        
+        struct Complexity: Decodable {
+            let complexity: Double
+        }
+        
         while true {
+            
+            TRY: do {
+                let filesWithComplexity = try inputFolder.files.map { f -> (File, Double) in
+                    let data = try f.read()
+                    let decoder = JSONDecoder()
+                    let c = try decoder.decode(Complexity.self, from: data)
+                    return (f, c.complexity)
+                }
+                world.inputFile = filesWithComplexity.min(by: { $0.1 < $1.1 })!.0
+            } catch let e {
+                if world.inputFile == fileToMinimize {
+                    break TRY
+                } else {
+                    throw e
+                }
+            }
+            
+            if inputFolder.files.contains(world.inputFile!) {
+                world.artifactsFolder = nil
+            }
+            workerSettings.command = .read
+            arguments = workerSettings.commandLineArguments + world.commandLineArguments
+
+            do {
+                lock.withLock {
+                    process = Process()
+                }
+                print("Will try to minimize \(world.inputFile!.name)")
+                process.launchPath = launchPath
+                process.environment = environment
+                process.arguments = arguments
+                print(process.arguments?.joined(separator: " ") ?? "")
+                try process.run()
+                process.waitUntilExit()
+            } catch let e {
+                print(e)
+                exit(1)
+            }
+            guard process.terminationStatus == FuzzerTerminationStatus.crash.rawValue else {
+                fatalError("The input to minimize didn't cause a crash")
+            }
+            
+            workerSettings.command = .minimize
+            world.inputCorpora = [inputFolder]
+            world.artifactsFolder = inputFolder
+            arguments = workerSettings.commandLineArguments + world.commandLineArguments
+
             do {
                 lock.withLock {
                     process = Process()
@@ -86,6 +138,7 @@ do {
                 process.launchPath = launchPath
                 process.environment = environment
                 process.arguments = arguments
+                print(process.arguments?.joined(separator: " ") ?? "")
                 try process.run()
                 process.waitUntilExit()
             } catch let e {
@@ -94,7 +147,7 @@ do {
             }
         }
         
-    } else {
+    } else if case .fuzz = workerSettings.command {
         do {
             lock.withLock {
                 process = Process()
@@ -108,6 +161,8 @@ do {
             print(e)
             exit(1)
         }
+    } else {
+        fatalError("Unsupported command")
     }
 
     withExtendedLifetime(sh) { }

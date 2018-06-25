@@ -23,6 +23,7 @@ public func hexString(_ h: Int) -> String {
 
 enum CorpusIndex: Hashable {
     case normal(Int)
+    case favored
 }
 
 extension FuzzerInfo {
@@ -41,6 +42,9 @@ extension FuzzerInfo {
         var cumulativeWeights: [UInt64] = []
         var coverageScore: Double = 0
         var allFeatures: [Feature: (Int, Complexity, CorpusIndex)] = [:]
+        
+        var forbiddenUnitHashes: Set<Int> = []
+        var favoredUnit: UnitInfo? = nil
     }
 }
 
@@ -50,12 +54,16 @@ extension FuzzerInfo.Corpus {
             switch idx {
             case .normal(let idx):
                 return units[idx]
+            case .favored:
+                return favoredUnit!
             }
         }
         set {
             switch idx {
             case .normal(let idx):
                 units[idx] = newValue
+            case .favored:
+                fatalError("Cannot assign new unit info to favoredUnit")
             }
         }
     }
@@ -66,12 +74,7 @@ extension FuzzerInfo.Corpus {
         let complexity = unitInfo.unit.complexity()
         let index = CorpusIndex.normal(units.endIndex)
         for f in unitInfo.initiallyUniqueFeatures {
-            // FIXME: this can definitely happen
-            if allFeatures[f] != nil {
-                print(f)
-                print("error: allFeatures[f] != nil")
-                preconditionFailure()
-            }
+            precondition(allFeatures[f] == nil)
             allFeatures[f] = (1, complexity, index)
         }
         for f in unitInfo.initiallyReplacingBestUnitForFeatures {
@@ -103,9 +106,6 @@ extension FuzzerInfo.Corpus {
             }
         }
         for (u, idx) in zip(units, units.indices) {
-            // the score is:
-            // the sum of the score of each feature that this unit is the best one for
-            // but it could be many other things, how do I know which one is best?
             if u.unit != nil, u.coverageScore == 0 {
                 print("DELETE") // FIXME: push this to World type in an effect return value
                 units[idx].unit = nil
@@ -139,8 +139,14 @@ extension FuzzerInfo.Corpus {
     }
     
     func chooseUnitIdxToMutate(_ r: inout Rand) -> CorpusIndex {
-        let x = r.weightedPickIndex(cumulativeWeights: cumulativeWeights)
-        return .normal(x)
+        if favoredUnit != nil, r.positiveInt(4) == 0 {
+            return .favored
+        } else if units.isEmpty {
+            return .favored
+        } else {
+            let x = r.weightedPickIndex(cumulativeWeights: cumulativeWeights)
+            return .normal(x)
+        }
     }
 
     func deleteUnit(_ idx: CorpusIndex) -> (inout World) throws -> Void {

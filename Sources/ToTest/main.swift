@@ -131,34 +131,39 @@ struct NothingMutators: Mutators {
 extension UInt8: FuzzUnit { }
 
 struct FT : FuzzTest {
-    // typealias Unit = Graph<UInt8>
+     typealias Unit = Graph<UInt8>
     // typealias Unit = Graph<Nothing>
-    typealias Unit = [UInt8]
-    typealias Mut = ArrayMutators<UnsignedIntegerMutators<UInt8>>//GraphMutators<UnsignedIntegerMutators<UInt8>>
+//    typealias Unit = [UInt8]
+//    typealias Mut = ArrayMutators<UnsignedIntegerMutators<UInt8>>
+    typealias Mut = GraphMutators<UnsignedIntegerMutators<UInt8>>
     
-    var mutators: FT.Mut = ArrayMutators(initializeElement: { $0.byte() }, elementMutators: UnsignedIntegerMutators.init()) //GraphMutators(vertexMutators: UnsignedIntegerMutators.init(), initializeVertex: { r in r.byte() })
-    //var mutators: FT.Mut = GraphMutators(vertexMutators: NothingMutators(), initializeVertex: { r in Nothing() })
+//    var mutators: FT.Mut = ArrayMutators(initializeElement: { $0.byte() }, elementMutators: UnsignedIntegerMutators.init())
+      var mutators = GraphMutators(vertexMutators: UnsignedIntegerMutators.init(), initializeVertex: { r in r.byte() })
+//    var mutators: FT.Mut = GraphMutators(vertexMutators: NothingMutators(), initializeVertex: { r in Nothing() })
     
     static func baseUnit() -> Unit {
-        return []//Graph()
+//        return []
+         return Graph()
     }
     
     func newUnit(_ r: inout Rand) -> Unit {
-        //var g = Graph<UInt8>()
-        //var g = Graph<Nothing>()
-        //for _ in 0 ..< r.positiveInt(10) {
-        //    _ = mutators.mutate(&g, &r)
-        //}
-        //return g
+        var g = Graph<UInt8>()
+//        var g = Graph<Nothing>()
+        for _ in 0 ..< r.positiveInt(10) {
+            _ = mutators.mutate(&g, &r)
+        }
+        return g
+        /*
         var x = FT.baseUnit()
         for _ in 0 ..< 100 {
             _ = mutators.mutate(&x, &r)
         }
         return x
+         */
     }
     
     func run(_ x: Unit) {
-        var x = x
+        //var x = x
         
         //let idx = x.partition(by: { $0 >= 10 })
         //guard x.indices.contains(idx) || idx == g.endIndex else {
@@ -178,6 +183,7 @@ struct FT : FuzzTest {
                 fatalError("You found a crash!")
             }
         }*/
+        /*
         let idx = x.stablePartition(count: x.count, isSuffixElement: { $0 > 0 })
         if
             idx == 1,
@@ -201,16 +207,17 @@ struct FT : FuzzTest {
             print(x)
             fatalError("You found a crash!")
         }
+        */
         
-        /*
-        let comp = g.stronglyConnectedComponents()
+        let comp = x.stronglyConnectedComponents()
         if comp.count >= 3,
-            comp[0].count >= 2,
-            comp[1].count >= 2
+            comp[0].count >= 3,
+            comp[1].count >= 3,
+            comp[2].count >= 3
         {
             fatalError()
         }
-        */
+        
         //g.crashIfCyclic()
         /*
         if
@@ -305,21 +312,4 @@ struct FT : FuzzTest {
 
 let graphMutators = GraphMutators(vertexMutators: UnsignedIntegerMutators<UInt8>(), initializeVertex: { r in r.byte() })
 
-let (parser, settingsBinder, worldBinder, _) = CommandLineFuzzerWorldInfo.argumentsParser()
-do {
-    let res = try parser.parse(Array(CommandLine.arguments.dropFirst()))
-    var settings: FuzzerSettings = FuzzerSettings()
-    try settingsBinder.fill(parseResult: res, into: &settings)
-    var world: CommandLineFuzzerWorldInfo = CommandLineFuzzerWorldInfo()
-    try worldBinder.fill(parseResult: res, into: &world)
-    
-    let fuzzer = Fuzzer(fuzzTest: FT(), settings: settings, world: CommandLineFuzzerWorld(info: world))
-    if settings.minimize {
-        fuzzer.minimizeLoop()
-    } else {
-        fuzzer.loop()
-    }
-} catch let e {
-    print(e)
-    parser.printUsage(on: stdoutStream)
-}
+CommandLineFuzzer.launch(fuzzTest: FT())

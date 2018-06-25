@@ -91,6 +91,19 @@ extension ArtifactSchema.Content: ArgumentKind {
     }
 }
 
+extension FuzzerSettings.Command: ArgumentKind {
+    public init(argument: String) throws {
+        if let x = FuzzerSettings.Command.init(rawValue: argument) {
+            self = x
+        } else {
+            throw ArgumentParserError.invalidValue(argument: argument, error: .unknown(value: argument))
+        }
+    }
+    public static var completion: ShellCompletion {
+        return ShellCompletion.none
+    }
+}
+
 extension CommandLineFuzzerWorldInfo {
     public static func argumentsParser() -> (ArgumentParser, ArgumentBinder<FuzzerSettings>, ArgumentBinder<CommandLineFuzzerWorldInfo>, ArgumentBinder<FuzzerManagerSettings>) {
         let parser = ArgumentParser(usage: usage, overview: overview)
@@ -171,18 +184,31 @@ extension CommandLineFuzzerWorldInfo {
             kind: String.self,
             usage: "The extension of the artifact"
         )
-        let minimize = parser.add(
-            option: "--minimize",
+        let noSaveArtifacts = parser.add(
+            option: "--no-save-artifact",
             shortName: nil,
             kind: Bool.self,
-            usage: "If set, will run in minimize mode."
+            usage: "If set, does not save artifacts"
+        )
+        let artifactContent = parser.add(
+            option: "--artifact-content",
+            shortName: nil,
+            kind: ArtifactSchema.Content.self,
+            usage: "kaffhdjk" // FIXME
         )
         
-        let minimizeFile = parser.add(
-            option: "--minimize-file",
+        let command = parser.add(
+            option: "--command",
+            shortName: nil,
+            kind: FuzzerSettings.Command.self,
+            usage: "The command to execute. (fuzz | minimize | read)"
+        )
+        
+        let inputFile = parser.add(
+            option: "--input-file",
             shortName: nil,
             kind: File.self,
-            usage: "If set, will try to minimize the given crashing input."
+            usage: "Input file"
         )
         
         let seed = parser.add(
@@ -205,7 +231,7 @@ extension CommandLineFuzzerWorldInfo {
         settingsBinder.bind(option: mutationDepth) { $0.mutateDepth = Int($1) }
         settingsBinder.bind(option: shuffleAtStartup) { $0.shuffleAtStartup = $1 }
         settingsBinder.bind(option: iterationTimeout) { $0.iterationTimeout = $1 }
-        settingsBinder.bind(option: minimize) { $0.minimize = $1 }
+        settingsBinder.bind(option: command) { $0.command = $1 }
         
         worldBinder.bind(option: inputCorpora) { $0.inputCorpora = $1 }
         worldBinder.bind(option: outputCorpus) { $0.outputCorpus = $1 }
@@ -213,9 +239,11 @@ extension CommandLineFuzzerWorldInfo {
         worldBinder.bind(option: artifactFileName) { $0.artifactsNameSchema.atoms = $1 }
         worldBinder.bind(option: artifactFileExtension) { $0.artifactsNameSchema.ext = $1 }
         worldBinder.bind(option: seed) { $0.rand = Rand(seed: UInt32($1)) }
+        worldBinder.bind(option: inputFile) { $0.inputFile = $1 }
+        worldBinder.bind(option: noSaveArtifacts) { x, _ in x.artifactsFolder = nil }
+        worldBinder.bind(option: artifactContent) { $0.artifactsContentSchema = $1 }
         
         managerSettingsBinder.bind(option: target) { $0.testExecutable = try getExecutableFile().parent!.file(named: $1) }
-        managerSettingsBinder.bind(option: minimizeFile) { $0.minimizeFile = $1 }
         managerSettingsBinder.bind(option: globalTimeout) { $0.globalTimeout = $1 }
         
         return (parser, settingsBinder, worldBinder, managerSettingsBinder)
@@ -224,7 +252,6 @@ extension CommandLineFuzzerWorldInfo {
 
 public struct FuzzerManagerSettings {
     public var testExecutable: File? = nil
-    public var minimizeFile: File? = nil
     public var globalTimeout: UInt? = nil
     public init() { }
 }
@@ -233,7 +260,6 @@ extension FuzzerManagerSettings {
     public var commandLineArguments: [String] {
         var args: [String] = []
         if let exec = testExecutable { args += ["--target", exec.path] }
-        if let minFile = minimizeFile { args += ["--minimize-file", minFile.path] }
         if let gtm = globalTimeout { args += ["--global-timeout", "\(gtm)"] }
         return args
     }
@@ -242,8 +268,8 @@ extension FuzzerManagerSettings {
 extension FuzzerSettings {
     public var commandLineArguments: [String] {
         var args: [String] = []
+        args += ["--command", "\(command)"]
         args += ["--max-complexity", "\(maxUnitComplexity)"]
-        if minimize { args.append("--minimize") }
         args += ["--iteration-timeout", "\(iterationTimeout)"]
         args += ["--max-number-of-runs", "\(maxNumberOfRuns)"]
         args += ["--mutation-depth", "\(mutateDepth)"]
@@ -256,14 +282,31 @@ extension CommandLineFuzzerWorldInfo {
     public var commandLineArguments: [String] {
         var args: [String] = []
         args += ["--seed", "\(rand.seed)"]
-        args += ["--artifact-folder", "\(artifactsFolder.path)"]
-        args += ["--artifact-filename", "\(artifactsNameSchema.atoms.map { $0.description }.joined())"]
-        if let ext = artifactsNameSchema.ext { args += ["--artifact-file-extension", "\(ext)"] }
+       
+        if let artifactsFolder = artifactsFolder {
+            args += ["--artifact-folder", "\(artifactsFolder.path)"]
+            args += ["--artifact-filename", "\(artifactsNameSchema.atoms.map { $0.description }.joined())"]
+            if let ext = artifactsNameSchema.ext { args += ["--artifact-file-extension", "\(ext)"] }
+            if let out = outputCorpus { args += ["--output-folder", "\(out.path)"] }
+            var contentSchema: [String] = []
+            if artifactsContentSchema.complexity { contentSchema.append("complexity") }
+            if artifactsContentSchema.hash { contentSchema.append("hash") }
+            if artifactsContentSchema.features { contentSchema.append("features") }
+            if artifactsContentSchema.kind { contentSchema.append("kind") }
+            if artifactsContentSchema.coverageScore { contentSchema.append("coverage") }
+            if !contentSchema.isEmpty {
+                args += ["--artifact-content", contentSchema.joined(separator: ",")]
+            }
+        } else {
+            args += ["--no-save-artifact"]
+        }
+        
+        if let f = inputFile { args += ["--input-file", "\(f.path)"] }
         if !inputCorpora.isEmpty {
             args.append("--input-folders")
             args += inputCorpora.map { $0.path }
         }
-        if let out = outputCorpus { args += ["--output-folder", "\(out.path)"] }
+        
         return args
     }
 }

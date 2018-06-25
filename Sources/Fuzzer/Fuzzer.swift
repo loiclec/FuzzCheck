@@ -1,4 +1,5 @@
 
+import Basic
 import Darwin
 import Foundation
 
@@ -14,6 +15,11 @@ public protocol FuzzTest {
     func run(_ u: Unit)
 }
 
+public enum FuzzerTerminationStatus: Int32 {
+    case success = 0
+    case crash = 1
+    case unknown = 2
+}
 /*
  For some reason having the fuzzer be generic over FuzzTest and containing the SignalsHandler was a problem.
  So I created another type that only depends on the FuzzUnit type and gather as much data as I can here, leaving
@@ -71,17 +77,19 @@ public final class FuzzerInfo <T, World: FuzzerWorld> where World.Unit == T {
             TracePC.crashed = true
             var features: [Feature] = []
             TracePC.collectFeatures(debug: true) { features.append($0) }
-            try! world.saveArtifact(unit: unit, features: features, coverage: nil, complexity: nil, hash: nil, kind: .crash)
-            exit(1)
+            try! world.saveArtifact(unit: unit, features: features, coverage: nil, complexity: unit.complexity(), hash: nil, kind: .crash)
+            exit(FuzzerTerminationStatus.crash.rawValue)
             
         case .interrupt:
-            exit(0)
+            exit(FuzzerTerminationStatus.success.rawValue)
             
         default:
-            exit(1)
+            exit(FuzzerTerminationStatus.unknown.rawValue)
         }
     }
 }
+
+public typealias CommandLineFuzzer <FT: FuzzTest> = Fuzzer<FT, CommandLineFuzzerWorld<FT.Unit>>
 
 public final class Fuzzer <FT: FuzzTest, World: FuzzerWorld> where World.Unit == FT.Unit {
     
@@ -91,7 +99,7 @@ public final class Fuzzer <FT: FuzzTest, World: FuzzerWorld> where World.Unit ==
     
     let fuzzTest: FT
     let signalsHandler: SignalsHandler
-
+    
     public init(fuzzTest: FT, settings: FuzzerSettings, world: World) {
         self.fuzzTest = fuzzTest
         self.info = Info(unit: FT.baseUnit(), settings: settings, world: world)
@@ -104,10 +112,29 @@ public final class Fuzzer <FT: FuzzTest, World: FuzzerWorld> where World.Unit ==
         
         precondition(Foundation.Thread.isMainThread, "Fuzzer can only be initialized on the main thread")
         
-        Foundation.Thread.callStackSymbols.forEach { print($0) }
         let idx = Foundation.Thread.callStackSymbols.firstIndex(where: { $0.contains(" main + ")})!
         let adr = Foundation.Thread.callStackReturnAddresses[idx].uintValue
         NormalizedPC.constant = adr
+    }
+}
+
+extension Fuzzer where World == CommandLineFuzzerWorld<FT.Unit> {
+    public static func launch(fuzzTest: FT) {
+        
+        let (parser, settingsBinder, worldBinder, _) = CommandLineFuzzerWorldInfo.argumentsParser()
+        do {
+            let res = try parser.parse(Array(CommandLine.arguments.dropFirst()))
+            var settings: FuzzerSettings = FuzzerSettings()
+            try settingsBinder.fill(parseResult: res, into: &settings)
+            var world: CommandLineFuzzerWorldInfo = CommandLineFuzzerWorldInfo()
+            try worldBinder.fill(parseResult: res, into: &world)
+
+            let fuzzer = Fuzzer(fuzzTest: fuzzTest, settings: settings, world: CommandLineFuzzerWorld(info: world))
+            fuzzer.launch()
+        } catch let e {
+            print(e)
+            parser.printUsage(on: stdoutStream)
+        }
     }
 }
 
@@ -155,7 +182,17 @@ public enum FuzzerUpdateKind: Equatable, CustomStringConvertible {
 }
 
 extension Fuzzer {
-
+    public func launch() {
+        switch info.settings.command {
+        case .fuzz:
+            loop()
+        case .minimize:
+            minimizeLoop()
+        case .read:
+            readAndExecuteInputFile()
+        }
+    }
+    
     enum AnalysisResult {
         case new(Info.Corpus.UnitInfo)
         case replace(index: CorpusIndex, features: [Feature], complexity: Complexity)
@@ -282,8 +319,9 @@ extension Fuzzer {
         info.unit = unit
         for _ in 0 ..< info.settings.mutateDepth {
             guard info.stats.totalNumberOfRuns < info.settings.maxNumberOfRuns else { break }
-            guard fuzzTest.mutators.mutate(&info.unit, &info.world.rand) else { break }
-            guard info.unit.complexity() < info.settings.maxUnitComplexity else { break }
+            guard fuzzTest.mutators.mutate(&info.unit, &info.world.rand) else { continue  }
+            guard !info.corpus.forbiddenUnitHashes.contains(info.unit.hash()) else { continue }
+            guard info.unit.complexity() < info.settings.maxUnitComplexity else { continue }
             analyze()
             guard case .didAnalyzeTestRun(let updatedCorpus) = info.state else {
                 fatalError("state should be didAnalyzeTestRun")
@@ -312,39 +350,35 @@ extension Fuzzer {
         info.world.reportEvent(.updatedCorpus(.done), stats: info.stats)
     }
     
+    func addInputCorpusToForbidenCorpus() throws {
+        let units = try info.world.readInputCorpus()
+        info.corpus.forbiddenUnitHashes.formUnion(units.map { $0.hash() })
+    }
+    /*
     public func pickUnitFromInputCorpus() throws -> (FT.Unit, [Feature]) {
         let units = try info.world.readInputCorpusWithFeatures()// readInputCorpus()
         guard !units.isEmpty else {
-            fatalError("units should not be empty")
+            fatalError("Input corpus should not be empty")
         }
-    
-        var complexities = units.map { ($0, $0.0.complexity()) }
-        complexities.sort { $0.1 > $1.1 }
-        let weights = (0 ..< complexities.count).scan(UInt64(1)) { $0 + UInt64($1) * UInt64($1) }
-        // e.g.
-        // complexities: [10, 8, 7,  4,  3,  1]
-        // weights     : [ 0, 1, 4,  9, 16, 25]
-        // cumulative  : [ 1, 2, 6, 15, 31, 56]
-        // so, heavy (quadratic) bias towards less complex units
-        let pick = info.world.rand.weightedPickIndex(cumulativeWeights: weights)
-        return units[pick]
+        info.corpus.forbiddenUnitHashes.formUnion(units.map { $0.0.hash() })
+        return units.min { $0.0.complexity() < $1.0.complexity() }!
     }
-    
+    */
     public func minimizeLoop() {
         info.processStartTime = info.world.clock()
         info.world.reportEvent(.updatedCorpus(.start), stats: info.stats)
-        
-        let (input, features) = try! pickUnitFromInputCorpus()
+        try! addInputCorpusToForbidenCorpus()
+        let input = try! info.world.readInputFile()
+        //let (input, features) = try! pickUnitFromInputCorpus()
         let newUnitInfo = Info.Corpus.UnitInfo(
             unit: input,
-            coverageScore: -1,
-            initiallyUniqueFeatures: features,
+            coverageScore: 1,
+            initiallyUniqueFeatures: [],
             initiallyReplacingBestUnitForFeatures: [],
             otherFeatures: []
         )
-        info.corpus.append(newUnitInfo)
+        info.corpus.favoredUnit = newUnitInfo
         info.corpus.updateScoresAndWeights()
-        
         info.settings.maxUnitComplexity = .init(input.complexity().value.nextDown)
         info.world.reportEvent(.updatedCorpus(.didReadCorpus), stats: info.stats)
         while info.stats.totalNumberOfRuns < info.settings.maxNumberOfRuns {
@@ -365,9 +399,20 @@ extension Fuzzer {
         info.updateStatsAfterRunAnalysis()
     }
     
-    func readAndExecuteCorpora() {
-        var units = [info.unit] + (try! info.world.readInputCorpus())
-
+    public func readAndExecuteInputFile() {
+        info.unit = try! info.world.readInputFile()
+        print("Will read and execute \(info.unit.hash())")
+        info.state = .willRunTest
+        runTest()
+    }
+    
+    func readAndExecuteCorpora() { // FIXME: name
+        var units = (try! info.world.readInputCorpus())
+        if units.isEmpty {
+            units.append(FT.baseUnit())
+            fatalError()
+        }
+        
         if info.settings.shuffleAtStartup {
             info.world.rand.shuffle(&units)
         }

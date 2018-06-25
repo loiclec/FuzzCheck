@@ -17,7 +17,7 @@ public struct Artifact <Unit: Codable> {
         let features: [Feature]?
         let coverageScore: Double?
         let hash: Int?
-        let complexity: Complexity?
+        let complexity: Double?
         let kind: ArtifactKind?
     }
 }
@@ -40,13 +40,13 @@ public struct ArtifactSchema {
     }
     
     public struct Content {
-        let features: Bool
-        let coverageScore: Bool
-        let hash: Bool
-        let complexity: Bool
-        let kind: Bool
+        public let features: Bool
+        public let coverageScore: Bool
+        public let hash: Bool
+        public let complexity: Bool
+        public let kind: Bool
     
-        init(features: Bool, coverageScore: Bool, hash: Bool, complexity: Bool, kind: Bool) {
+        public init(features: Bool, coverageScore: Bool, hash: Bool, complexity: Bool, kind: Bool) {
            self.features = features
            self.coverageScore = coverageScore
            self.hash = hash
@@ -62,7 +62,7 @@ extension Artifact.Content {
         self.features = schema.features ? features : nil
         self.coverageScore = schema.coverageScore ? coverage : nil
         self.hash = schema.hash ? hash : nil
-        self.complexity = schema.complexity ? complexity : nil
+        self.complexity = schema.complexity ? complexity?.value : nil
         self.kind = schema.kind ? kind : nil
     }
 }
@@ -212,7 +212,7 @@ extension Artifact.Content: Codable {
         } else {
             let container = try decoder.container(keyedBy: CodingKey.self)
             self.unit = try container.decode(Unit.self, forKey: .unit)
-            self.complexity = try container.decodeIfPresent(Complexity.self, forKey: .complexity)
+            self.complexity = try container.decodeIfPresent(Double.self, forKey: .complexity)
             self.coverageScore = try container.decodeIfPresent(Double.self, forKey: .coverage)
             self.hash = try container.decodeIfPresent(Int.self, forKey: .hash)
             self.features = try container.decodeIfPresent(Array<Feature>.self, forKey: .features)

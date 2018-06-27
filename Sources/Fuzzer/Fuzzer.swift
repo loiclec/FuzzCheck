@@ -35,7 +35,6 @@ public final class FuzzerInfo <T, World: FuzzerWorld> where World.Unit == T {
     
     var processStartTime: UInt = 0
     var world: World
-    var state: State = .initial
 
     init(unit: T, settings: FuzzerSettings, world: World) {
         self.unit = unit
@@ -43,21 +42,8 @@ public final class FuzzerInfo <T, World: FuzzerWorld> where World.Unit == T {
         self.settings = settings
         self.world = world
     }
-    
-    enum State: Equatable {
-        case initial
-        case didReadCorpora
-        case willMutateAndTestOne
-        case willRunTest
-        case runningTest(startTime: UInt)
-        case didRunTest(timeTaken: UInt)
-        case willAnalyzeTestRun
-        case didAnalyzeTestRun(didUpdateCorpus: FuzzerUpdateKind?)
-        case done
-    }
-    
+
     func updateStatsAfterRunAnalysis() {
-        guard case .didAnalyzeTestRun(_) = state else { fatalError("state should be didAnalyzeTestRun") }
         let now = world.clock()
         let seconds = Double(now - processStartTime) / 1_000_000
         stats.executionsPerSecond = Int((Double(stats.totalNumberOfRuns) / seconds).rounded())
@@ -130,7 +116,14 @@ extension Fuzzer where World == CommandLineFuzzerWorld<FT.Unit> {
             try worldBinder.fill(parseResult: res, into: &world)
 
             let fuzzer = Fuzzer(fuzzTest: fuzzTest, settings: settings, world: CommandLineFuzzerWorld(info: world))
-            fuzzer.launch()
+            switch fuzzer.info.settings.command {
+            case .fuzz:
+                fuzzer.loop()
+            case .minimize:
+                fuzzer.minimizeLoop()
+            case .read:
+                fuzzer.readAndExecuteInputFile()
+            }
         } catch let e {
             print(e)
             parser.printUsage(on: stdoutStream)
@@ -157,7 +150,6 @@ public enum FuzzerStopReason: CustomStringConvertible {
 
 public enum FuzzerUpdateKind: Equatable, CustomStringConvertible {
     case new
-    case replace(Int)
     case reduce
     case start
     case didReadCorpus
@@ -167,8 +159,6 @@ public enum FuzzerUpdateKind: Equatable, CustomStringConvertible {
         switch self {
         case .new:
             return "NEW "
-        case .replace(let count):
-            return "REPLA \(count)"
         case .reduce:
             return "REDUCE"
         case .start:
@@ -182,17 +172,6 @@ public enum FuzzerUpdateKind: Equatable, CustomStringConvertible {
 }
 
 extension Fuzzer {
-    public func launch() {
-        switch info.settings.command {
-        case .fuzz:
-            loop()
-        case .minimize:
-            minimizeLoop()
-        case .read:
-            readAndExecuteInputFile()
-        }
-    }
-    
     enum AnalysisResult {
         case new(Info.Corpus.UnitInfo)
         case replace(index: CorpusIndex, features: [Feature], complexity: Complexity)
@@ -200,25 +179,16 @@ extension Fuzzer {
     }
 
     func runTest() {
-        guard case .willRunTest = info.state else { fatalError("state should be willRunTest") }
-        
         TracePC.resetMaps()
         
-        let startTime = info.world.clock()
-        info.state = .runningTest(startTime: startTime)
         TracePC.recording = true
         _ = fuzzTest.run(info.unit)
         TracePC.recording = false
-        info.state = .didRunTest(timeTaken: info.world.clock() - startTime)
 
         info.stats.totalNumberOfRuns += 1
     }
 
     func analyzeTestRun() -> AnalysisResult {
-        guard case .willAnalyzeTestRun = info.state else {
-            fatalError("state should be willAnalyzeTestRun")
-        }
-        
         let currentUnitComplexity = info.unit.complexity()
         
         var uniqueFeatures: [Feature] = []
@@ -242,7 +212,6 @@ extension Fuzzer {
         
         // #HGqvcfCLVhGr
         guard !(replacingFeatures.isEmpty && uniqueFeatures.isEmpty) else {
-            info.state = .didAnalyzeTestRun(didUpdateCorpus: nil)
             return .nothing
         }
         
@@ -262,14 +231,12 @@ extension Fuzzer {
             //       is interesting about the old unit, and we do not care about its other
             //       properties, so it is not a loss if we lose them. But is that true?
             if replacingFeatures.lazy.map({$0.0}) == (oldUnitInfo.initiallyUniqueFeatures + oldUnitInfo.initiallyReplacingBestUnitForFeatures) {
-                info.state = .didAnalyzeTestRun(didUpdateCorpus: .reduce)
                 return .replace(index: index, features: replacingFeatures.map{$0.0}, complexity: currentUnitComplexity)
             } else {
                 // else if the old unit had more features than the current unit,
                 // then the current unit is not interesting at all and we ignore it
                 // TODO: is that true? maybe there is some value in keeping simpler,
                 //       less interesting units anyway? Just give them a low score.
-                info.state = .didAnalyzeTestRun(didUpdateCorpus: nil)
                 return .nothing
             }
         }
@@ -281,15 +248,16 @@ extension Fuzzer {
             initiallyReplacingBestUnitForFeatures: replacingFeatures.map { $0.0 },
             otherFeatures: otherFeatures
         )
-        info.state = .didAnalyzeTestRun(didUpdateCorpus: .new)
         return .new(newUnitInfo)
     }
     
     func updateCorpusAfterAnalysis(result: AnalysisResult) {
         switch result {
         case .new(let unitInfo):
-            info.corpus.append(unitInfo)
+            let effect = info.corpus.append(unitInfo)
+            try! effect(&info.world)
             info.corpus.updateScoresAndWeights()
+            
         case .replace(let index, let features, let complexity):
             let effect = info.corpus.replace(index, with: info.unit)
             try! effect(&info.world)
@@ -299,39 +267,24 @@ extension Fuzzer {
                 info.corpus.allFeatures[f] = (currentCount, complexity, index)
             }
             info.corpus.updateScoresAndWeights()
+            
         case .nothing:
             return
         }
     }
     
     func mutateAndTestOne() {
-        guard case .willMutateAndTestOne = info.state else {
-            fatalError("state should be willMutateAndTestOne")
-        }
         let idx = info.corpus.chooseUnitIdxToMutate(&info.world.rand)
         guard let unit = info.corpus[idx].unit else {
-            print(info.corpus.units.map { ($0.coverageScore, $0.unit != nil) })
-            print(info.corpus.cumulativeWeights)
-            print(idx)
-            sleep(1)
             fatalError("This should never happen, but any bug in the fuzzer might lead to this situation.")
         }
         info.unit = unit
         for _ in 0 ..< info.settings.mutateDepth {
             guard info.stats.totalNumberOfRuns < info.settings.maxNumberOfRuns else { break }
-            guard fuzzTest.mutators.mutate(&info.unit, &info.world.rand) else { continue  }
+            guard fuzzTest.mutators.mutate(&info.unit, &info.world.rand) else { break  }
             guard !info.corpus.forbiddenUnitHashes.contains(info.unit.hash()) else { continue }
             guard info.unit.complexity() < info.settings.maxUnitComplexity else { continue }
             analyze()
-            guard case .didAnalyzeTestRun(let updatedCorpus) = info.state else {
-                fatalError("state should be didAnalyzeTestRun")
-            }
-            
-            if let updateKind = updatedCorpus {
-                info.updatePeakMemoryUsage()
-                info.world.reportEvent(.updatedCorpus(updateKind), stats: info.stats)
-                try! info.world.addToOutputCorpus(info.unit)
-            }
         }
     }
 
@@ -343,10 +296,8 @@ extension Fuzzer {
         info.world.reportEvent(.updatedCorpus(.didReadCorpus), stats: info.stats)
             
         while info.stats.totalNumberOfRuns < info.settings.maxNumberOfRuns {
-            info.state = .willMutateAndTestOne
             mutateAndTestOne()
         }
-        info.state = .done
         info.world.reportEvent(.updatedCorpus(.done), stats: info.stats)
     }
     
@@ -382,27 +333,34 @@ extension Fuzzer {
         info.settings.maxUnitComplexity = .init(input.complexity().value.nextDown)
         info.world.reportEvent(.updatedCorpus(.didReadCorpus), stats: info.stats)
         while info.stats.totalNumberOfRuns < info.settings.maxNumberOfRuns {
-            info.state = .willMutateAndTestOne
             mutateAndTestOne()
         }
-        info.state = .done
         info.world.reportEvent(.updatedCorpus(.done), stats: info.stats)
     }
     
     func analyze() {
-        info.state = .willRunTest
         runTest()
         
-        info.state = .willAnalyzeTestRun
         let res = analyzeTestRun()
         updateCorpusAfterAnalysis(result: res)
         info.updateStatsAfterRunAnalysis()
+        
+        guard let event: FuzzerEvent = {
+            switch res {
+            case .new(_)    : return .updatedCorpus(.new)
+            case .replace(_): return .updatedCorpus(.reduce)
+            case .nothing   : return nil
+            }
+        }() else {
+            return
+        }
+        
+        info.updatePeakMemoryUsage()
+        info.world.reportEvent(event, stats: info.stats)
     }
     
     public func readAndExecuteInputFile() {
         info.unit = try! info.world.readInputFile()
-        print("Will read and execute \(info.unit.hash())")
-        info.state = .willRunTest
         runTest()
     }
     
@@ -423,7 +381,5 @@ extension Fuzzer {
             info.unit = u
             analyze()
         }
-        
-        info.state = .didReadCorpora
     }
 }

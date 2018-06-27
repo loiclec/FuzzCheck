@@ -70,7 +70,9 @@ extension FuzzerInfo.Corpus {
 }
 
 extension FuzzerInfo.Corpus {
-    func append(_ unitInfo: UnitInfo) {
+    func append(_ unitInfo: UnitInfo) -> (inout World) throws -> Void {
+        precondition(unitInfo.unit != nil)
+
         let complexity = unitInfo.unit.complexity()
         let index = CorpusIndex.normal(units.endIndex)
         for f in unitInfo.initiallyUniqueFeatures {
@@ -87,6 +89,9 @@ extension FuzzerInfo.Corpus {
         
         self.units.append(unitInfo)
         self.numActiveUnits += 1
+        return { w in
+            try w.addToOutputCorpus(unitInfo.unit!)
+        }
     }
 }
 

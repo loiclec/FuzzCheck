@@ -305,16 +305,7 @@ extension Fuzzer {
         let units = try info.world.readInputCorpus()
         info.corpus.forbiddenUnitHashes.formUnion(units.map { $0.hash() })
     }
-    /*
-    public func pickUnitFromInputCorpus() throws -> (FT.Unit, [Feature]) {
-        let units = try info.world.readInputCorpusWithFeatures()// readInputCorpus()
-        guard !units.isEmpty else {
-            fatalError("Input corpus should not be empty")
-        }
-        info.corpus.forbiddenUnitHashes.formUnion(units.map { $0.0.hash() })
-        return units.min { $0.0.complexity() < $1.0.complexity() }!
-    }
-    */
+
     public func minimizeLoop() {
         info.processStartTime = info.world.clock()
         info.world.reportEvent(.updatedCorpus(.start), stats: info.stats)

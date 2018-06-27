@@ -83,7 +83,7 @@ enum TracePC {
     }
 
     /// Handle a call to the sanitizer code coverage function `trace_pc_indir`
-    static func handleCallerCallee(caller: NormalizedPC, callee: NormalizedPC) {
+    static func handlePCIndir(caller: NormalizedPC, callee: NormalizedPC) {
         let (caller, callee) = (caller.value, callee.value)
         indirectFeatures.append(.init(caller: caller, callee: callee))
     }

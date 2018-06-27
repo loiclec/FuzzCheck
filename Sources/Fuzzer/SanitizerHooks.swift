@@ -35,7 +35,7 @@ func trace_pc_indir(callee: PC) {
     guard TracePC.recording else { return }
 
     let caller = PC(bitPattern: __return_address())
-    TracePC.handleCallerCallee(caller: NormalizedPC(caller), callee: NormalizedPC(callee))
+    TracePC.handlePCIndir(caller: NormalizedPC(caller), callee: NormalizedPC(callee))
 }
 
 @_cdecl("__sanitizer_cov_trace_cmp8")

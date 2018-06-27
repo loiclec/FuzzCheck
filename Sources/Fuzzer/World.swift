@@ -21,7 +21,7 @@ public protocol FuzzerWorld {
     mutating func readInputCorpus() throws -> [Unit]
     mutating func readInputFile() throws -> Unit
     
-    mutating func saveArtifact(unit: Unit, features: [Feature]?, coverage: Double?, complexity: Complexity?, hash: Int?, kind: ArtifactKind) throws
+    mutating func saveArtifact(unit: Unit, features: [Feature]?, coverage: Double?, complexity: Double?, hash: Int?, kind: ArtifactKind) throws
     mutating func addToOutputCorpus(_ unit: Unit) throws
     mutating func removeFromOutputCorpus(_ unit: Unit) throws
     mutating func reportEvent(_ event: FuzzerEvent, stats: FuzzerStats)
@@ -51,11 +51,11 @@ public struct FuzzerSettings {
     public var command: Command
     public var iterationTimeout: UInt
     public var maxNumberOfRuns: Int
-    public var maxUnitComplexity: Complexity
+    public var maxUnitComplexity: Double
     public var mutateDepth: Int
     public var shuffleAtStartup: Bool
     
-    public init(command: Command = .fuzz, iterationTimeout: UInt = UInt.max, maxNumberOfRuns: Int = Int.max, maxUnitComplexity: Complexity = 256.0, mutateDepth: Int = 3, shuffleAtStartup: Bool = true) {
+    public init(command: Command = .fuzz, iterationTimeout: UInt = UInt.max, maxNumberOfRuns: Int = Int.max, maxUnitComplexity: Double = 256.0, mutateDepth: Int = 3, shuffleAtStartup: Bool = true) {
         self.command = command
         self.iterationTimeout = iterationTimeout
         self.maxNumberOfRuns = maxNumberOfRuns
@@ -100,7 +100,7 @@ public struct CommandLineFuzzerWorld <Unit: FuzzUnit> : FuzzerWorld {
         return UInt(r.ru_maxrss) >> 20
     }
     
-    public func saveArtifact(unit: Unit, features: [Feature]?, coverage: Double?, complexity: Complexity?, hash: Int?, kind: ArtifactKind) throws {
+    public func saveArtifact(unit: Unit, features: [Feature]?, coverage: Double?, complexity: Double?, hash: Int?, kind: ArtifactKind) throws {
         guard let artifactsFolder = info.artifactsFolder else {
             return
         }

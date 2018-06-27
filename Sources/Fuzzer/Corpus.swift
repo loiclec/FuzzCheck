@@ -2,7 +2,7 @@
 import Darwin
 
 extension Optional: FuzzUnit where Wrapped: FuzzUnit {
-    public func complexity() -> Complexity {
+    public func complexity() -> Double {
         switch self {
         case .none: return 0.0
         case .some(let w): return w.complexity()
@@ -41,7 +41,7 @@ extension FuzzerInfo {
         var units: [UnitInfo] = []
         var cumulativeWeights: [UInt64] = []
         var coverageScore: Double = 0
-        var allFeatures: [Feature: (Int, Complexity, CorpusIndex)] = [:]
+        var allFeatures: [Feature: (Int, Double, CorpusIndex)] = [:]
         
         var forbiddenUnitHashes: Set<Int> = []
         var favoredUnit: UnitInfo? = nil

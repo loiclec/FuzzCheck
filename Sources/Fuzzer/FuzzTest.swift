@@ -1,6 +1,6 @@
 
 public protocol FuzzUnit: Codable {
-    func complexity() -> Complexity
+    func complexity() -> Double
     func hash() -> Int
 }
 
@@ -27,9 +27,8 @@ public struct IntWrapper: FuzzUnit, CustomStringConvertible {
     
     public init(x: Int) { self.x = x }
 
-    public func complexity() -> Complexity {
-        let c = self.x <= 0 ? Double.greatestFiniteMagnitude : (200.0 + (100.0 / Double(self.x))) 
-        return Complexity(c)
+    public func complexity() -> Double {
+        return self.x <= 0 ? Double.greatestFiniteMagnitude : (200.0 + (100.0 / Double(self.x)))
     }
     
     public func hash() -> Int {
@@ -62,7 +61,7 @@ public struct IntWrapperMutators: Mutators {
 }
 
 extension FixedWidthInteger where Self: UnsignedInteger {
-    public func complexity() -> Complexity {
+    public func complexity() -> Double {
         return 1.0
     }
     public func hash() -> Int {
@@ -118,8 +117,8 @@ public struct UnsignedIntegerMutators <I: FixedWidthInteger & UnsignedInteger & 
 }
 
 extension Array: FuzzUnit where Element: FuzzUnit {
-    public func complexity() -> Complexity {
-        return Complexity(Double(1 + count))
+    public func complexity() -> Double {
+        return Double(1 + count)
     }
     
     public func hash() -> Int {

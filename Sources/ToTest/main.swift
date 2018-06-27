@@ -114,7 +114,7 @@ extension RangeReplaceableCollection where Self: MutableCollection, Self: Random
 
 struct Nothing: Hashable { }
 extension Nothing: FuzzUnit {
-    func complexity() -> Complexity {
+    func complexity() -> Double {
         return 1.0
     }
     func hash() -> Int {

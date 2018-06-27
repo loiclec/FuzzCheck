@@ -227,7 +227,7 @@ extension CommandLineFuzzerWorldInfo {
         )
         
         settingsBinder.bind(option: maxNumberOfRuns) { $0.maxNumberOfRuns = Int($1) }
-        settingsBinder.bind(option: maxComplexity) { $0.maxUnitComplexity = Complexity($1) }
+        settingsBinder.bind(option: maxComplexity) { $0.maxUnitComplexity = $1 }
         settingsBinder.bind(option: mutationDepth) { $0.mutateDepth = Int($1) }
         settingsBinder.bind(option: shuffleAtStartup) { $0.shuffleAtStartup = $1 }
         settingsBinder.bind(option: iterationTimeout) { $0.iterationTimeout = $1 }

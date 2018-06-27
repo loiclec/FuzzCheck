@@ -50,9 +50,6 @@ public final class FuzzerInfo <T, World: FuzzerWorld> where World.Unit == T {
         stats.corpusSize = corpus.numActiveUnits
         stats.totalPCCoverage = TracePC.getTotalPCCoverage()
         stats.score = Int(corpus.coverageScore)
-    }
-    
-    func updatePeakMemoryUsage() {
         stats.rss = Int(world.getPeakMemoryUsage())
     }
     
@@ -62,7 +59,7 @@ public final class FuzzerInfo <T, World: FuzzerWorld> where World.Unit == T {
         case .illegalInstruction, .abort, .busError, .floatingPointException:
             TracePC.crashed = true
             var features: [Feature] = []
-            TracePC.collectFeatures(debug: true) { features.append($0) }
+            TracePC.collectFeatures { features.append($0) }
             try! world.saveArtifact(unit: unit, features: features, coverage: nil, complexity: unit.complexity(), hash: nil, kind: .crash)
             exit(FuzzerTerminationStatus.crash.rawValue)
             
@@ -174,12 +171,12 @@ public enum FuzzerUpdateKind: Equatable, CustomStringConvertible {
 extension Fuzzer {
     enum AnalysisResult {
         case new(Info.Corpus.UnitInfo)
-        case replace(index: CorpusIndex, features: [Feature], complexity: Complexity)
+        case replace(index: CorpusIndex, features: [Feature], complexity: Double)
         case nothing
     }
 
-    func runTest() {
-        TracePC.resetMaps()
+    func runAndRecordTest() {
+        TracePC.resetTestRecordings()
         
         TracePC.recording = true
         _ = fuzzTest.run(info.unit)
@@ -188,7 +185,7 @@ extension Fuzzer {
         info.stats.totalNumberOfRuns += 1
     }
 
-    func analyzeTestRun() -> AnalysisResult {
+    func analyzeTestRecording() -> AnalysisResult {
         let currentUnitComplexity = info.unit.complexity()
         
         var uniqueFeatures: [Feature] = []
@@ -196,7 +193,7 @@ extension Fuzzer {
         
         var otherFeatures: [Feature] = []
         
-        TracePC.collectFeatures(debug: false) { feature in
+        TracePC.collectFeatures { feature in
             guard let (_, oldComplexity, oldCorpusIndex) = info.corpus.allFeatures[feature] else {
                 uniqueFeatures.append(feature)
                 return
@@ -311,7 +308,6 @@ extension Fuzzer {
         info.world.reportEvent(.updatedCorpus(.start), stats: info.stats)
         try! addInputCorpusToForbidenCorpus()
         let input = try! info.world.readInputFile()
-        //let (input, features) = try! pickUnitFromInputCorpus()
         let newUnitInfo = Info.Corpus.UnitInfo(
             unit: input,
             coverageScore: 1,
@@ -321,7 +317,7 @@ extension Fuzzer {
         )
         info.corpus.favoredUnit = newUnitInfo
         info.corpus.updateScoresAndWeights()
-        info.settings.maxUnitComplexity = .init(input.complexity().value.nextDown)
+        info.settings.maxUnitComplexity = input.complexity().nextDown
         info.world.reportEvent(.updatedCorpus(.didReadCorpus), stats: info.stats)
         while info.stats.totalNumberOfRuns < info.settings.maxNumberOfRuns {
             mutateAndTestOne()
@@ -330,9 +326,9 @@ extension Fuzzer {
     }
     
     func analyze() {
-        runTest()
+        runAndRecordTest()
         
-        let res = analyzeTestRun()
+        let res = analyzeTestRecording()
         updateCorpusAfterAnalysis(result: res)
         info.updateStatsAfterRunAnalysis()
         
@@ -346,13 +342,12 @@ extension Fuzzer {
             return
         }
         
-        info.updatePeakMemoryUsage()
         info.world.reportEvent(event, stats: info.stats)
     }
     
     public func readAndExecuteInputFile() {
         info.unit = try! info.world.readInputFile()
-        runTest()
+        runAndRecordTest()
     }
     
     func readAndExecuteCorpora() { // FIXME: name

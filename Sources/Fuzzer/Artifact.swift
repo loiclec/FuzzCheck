@@ -57,19 +57,19 @@ public struct ArtifactSchema {
 }
 
 extension Artifact.Content {
-    init(schema: ArtifactSchema.Content, unit: Unit, features: [Feature]?, coverage: Double?, hash: Int?, complexity: Complexity?, kind: ArtifactKind) {
+    init(schema: ArtifactSchema.Content, unit: Unit, features: [Feature]?, coverage: Double?, hash: Int?, complexity: Double?, kind: ArtifactKind) {
         self.unit = unit
         self.features = schema.features ? features : nil
         self.coverageScore = schema.coverageScore ? coverage : nil
         self.hash = schema.hash ? hash : nil
-        self.complexity = schema.complexity ? complexity?.value : nil
+        self.complexity = schema.complexity ? complexity : nil
         self.kind = schema.kind ? kind : nil
     }
 }
 
 public struct ArtifactNameInfo: Hashable {
     let hash: Int
-    let complexity: Complexity
+    let complexity: Double
     let kind: ArtifactKind
 }
 
@@ -113,7 +113,7 @@ public struct ArtifactNameWithoutIndex: Hashable {
             case .hash:
                 name += hexString(info.hash)
             case .complexity:
-                name += "\(Int(info.complexity.value.rounded()))"
+                name += "\(Int(info.complexity.rounded()))"
             case .kind:
                 name += "\(info.kind)"
             case .index:

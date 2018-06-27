@@ -10,23 +10,6 @@ extension UnsafeMutableBufferPointer {
         return b
     }
 }
-
-var PCs = UnsafeMutableBufferPointer<UInt>.allocateAndInitializeTo(0, capacity: TracePC.numPCs().rounded(upToMultipleOf: 8))
-var eightBitCounters = UnsafeMutableBufferPointer<UInt8>.allocateAndInitializeTo(0, capacity: TracePC.numPCs().rounded(upToMultipleOf: 8) )
-
-func counterToFeature <T: BinaryInteger> (_ counter: T) -> UInt32 {
-    precondition(counter > 0)
-   
-    if counter >= 128 { return 7 }
-    if counter >= 32  { return 6 }
-    if counter >= 16  { return 5 }
-    if counter >= 8   { return 4 }
-    if counter >= 4   { return 3 }
-    if counter >= 3   { return 2 }
-    if counter >= 2   { return 1 }
-    return 0
-}
-
 typealias PC = UInt
 
 enum TracePC {
@@ -35,6 +18,9 @@ enum TracePC {
     static var numGuards: Int = 0
     static var crashed = false
     
+    static var PCs = UnsafeMutableBufferPointer<UInt>.allocateAndInitializeTo(0, capacity: TracePC.numPCs())
+    static var eightBitCounters = UnsafeMutableBufferPointer<UInt8>.allocateAndInitializeTo(0, capacity: TracePC.numPCs())
+
     private static var indirectFeatures: [Feature.Indirect] = []
     private static var valueProfileFeatures: [Feature.ValueProfile] = []
     
@@ -64,7 +50,7 @@ enum TracePC {
         return PCs.reduce(0) { $0 + ($1 != 0 ? 1 : 0) }
     }
     
-    static func collectFeatures(debug: Bool, _ handle: (Feature) -> Void) {
+    static func collectFeatures(_ handle: (Feature) -> Void) {
         
         // the features are passed here in a deterministic order. ref: #mxrvFXBpY9ij
         let N = numPCs()
@@ -87,11 +73,11 @@ enum TracePC {
         }
     }
     
-    static func handleCmp <T: BinaryInteger & UnsignedInteger> (pc: NormalizedPC, arg1: T, arg2: T) {
+    static func handleTraceCmp <T: BinaryInteger & UnsignedInteger> (pc: NormalizedPC, arg1: T, arg2: T) {
         valueProfileFeatures.append(.init(pc: pc.value, arg1: numericCast(arg1), arg2: numericCast(arg2)))
     }
     
-    static func resetMaps() {
+    static func resetTestRecordings() {
         UnsafeMutableBufferPointer(rebasing: eightBitCounters[..<numPCs()]).assign(repeating: 0)
         indirectFeatures.removeAll(keepingCapacity: true)
         valueProfileFeatures.removeAll(keepingCapacity: true)

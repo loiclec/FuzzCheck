@@ -41,9 +41,9 @@ extension Graph: Codable where V: Codable {
 }
 
 extension Graph: FuzzUnit where V: FuzzUnit, V: Hashable {
-    public func complexity() -> Complexity {
+    public func complexity() -> Double {
         precondition(totalSize >= 0)
-        return Complexity(1 + Double(totalSize))
+        return 1 + Double(totalSize)
     }
     
     public func hash() -> Int {

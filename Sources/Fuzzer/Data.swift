@@ -5,40 +5,6 @@
 //  Created by Loïc Lecrenier on 27/05/2018.
 //
 
-public struct Complexity: Codable {
-    public var value: Double
-}
-extension Complexity {
-    public init(_ v: Double) {
-        self.value = v
-    }
-}
-extension Complexity: ExpressibleByFloatLiteral {
-    public init(floatLiteral value: Double) {
-        self.value = value
-    }
-}
-extension Complexity: Hashable {}
-extension Complexity: Comparable {
-    public static func < (lhs: Complexity, rhs: Complexity) -> Bool {
-        return lhs.value < rhs.value
-    }
-    public static func <= (lhs: Complexity, rhs: Complexity) -> Bool {
-        return lhs.value <= rhs.value
-    }
-    public static func > (lhs: Complexity, rhs: Complexity) -> Bool {
-        return lhs.value > rhs.value
-    }
-    public static func >= (lhs: Complexity, rhs: Complexity) -> Bool {
-        return lhs.value >= rhs.value
-    }
-}
-extension Complexity: CustomStringConvertible {
-    public var description: String {
-        return value.description
-    }
-}
-
 public enum Feature: Equatable, Hashable {
     case indirect(Indirect)
     case edge(Edge)
@@ -61,6 +27,19 @@ extension Feature {
     }
 }
 
+
+func scoreFromByte <T: BinaryInteger> (_ counter: T) -> UInt32 {
+    if counter >= 128 { return 7 }
+    if counter >= 32  { return 6 }
+    if counter >= 16  { return 5 }
+    if counter >= 8   { return 4 }
+    if counter >= 4   { return 3 }
+    if counter >= 3   { return 2 }
+    if counter >= 2   { return 1 }
+    return 0
+}
+
+
 extension Feature {
     public struct Indirect: Equatable, Hashable {
         let caller: UInt
@@ -77,7 +56,7 @@ extension Feature {
         
         init(pcguard: UInt, intensity: UInt8) {
             self.pcguard = pcguard
-            self.intensity = UInt8(counterToFeature(intensity))
+            self.intensity = UInt8(scoreFromByte(intensity))
         }
     }
     public struct ValueProfile: Equatable, Hashable {
@@ -91,7 +70,7 @@ extension Feature {
         }
         init(pc: UInt, arg1: UInt64, arg2: UInt64) {
             self.pc = pc
-            self.argxordist = UInt64(counterToFeature((arg1 &- arg2).nonzeroBitCount + 1))
+            self.argxordist = UInt64(scoreFromByte((arg1 &- arg2).nonzeroBitCount))
         }
     }
     public struct GEP: Equatable, Hashable {

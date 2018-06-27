@@ -133,11 +133,11 @@ extension Array: FuzzUnit where Element: FuzzUnit {
 public struct ArrayMutators <M: Mutators> : Mutators {
     public typealias Mutated = Array<M.Mutated>
     
-    public let initializeElement: (inout Rand) -> M.Mutated
+    public let randomElement: (inout Rand) -> M.Mutated
     public let elementMutators: M
     
     public init(initializeElement: @escaping (inout Rand) -> M.Mutated, elementMutators: M) {
-        self.initializeElement = initializeElement
+        self.randomElement = initializeElement
         self.elementMutators = elementMutators
     }
     
@@ -174,7 +174,7 @@ public struct ArrayMutators <M: Mutators> : Mutators {
     }
     
     func appendNew(_ x: inout Mutated, _ r: inout Rand) -> Bool {
-        x.append(initializeElement(&r))
+        x.append(randomElement(&r))
         return true
     }
     
@@ -189,7 +189,7 @@ public struct ArrayMutators <M: Mutators> : Mutators {
     func appendRepeatedNew(_ x: inout Mutated, _ r: inout Rand) -> Bool {
         
         guard !x.isEmpty else { return false }
-        let y = initializeElement(&r)
+        let y = randomElement(&r)
         let count = r.positiveInt(x.count) + 1 // TODO: don't use uniform distribution, favor lower values
         x += repeatElement(y, count: count)
         return true
@@ -199,7 +199,7 @@ public struct ArrayMutators <M: Mutators> : Mutators {
         
         guard !x.isEmpty else { return false }
         let i = r.int(inside: x.indices)
-        x.insert(initializeElement(&r), at: i)
+        x.insert(randomElement(&r), at: i)
         return true
     }
     
@@ -215,7 +215,7 @@ public struct ArrayMutators <M: Mutators> : Mutators {
     func insertRepeatedNew(_ x: inout Mutated, _ r: inout Rand) -> Bool {
         
         guard !x.isEmpty else { return false }
-        let y = initializeElement(&r)
+        let y = randomElement(&r)
         let count = r.positiveInt(x.count) + 1 // TODO: don't use uniform distribution, favor lower values
         let i = r.int(inside: x.indices)
         x.insert(contentsOf: repeatElement(y, count: count), at: i)
@@ -305,7 +305,7 @@ public struct ArrayMutators <M: Mutators> : Mutators {
         x.removeAll()
         let count = r.positiveInt(256)
         for _ in 0 ..< count {
-            x.append(initializeElement(&r))
+            x.append(randomElement(&r))
         }
         return true
     }

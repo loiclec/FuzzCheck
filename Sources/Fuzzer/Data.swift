@@ -8,7 +8,7 @@
 public enum Feature: Equatable, Hashable {
     case indirect(Indirect)
     case edge(Edge)
-    case valueProfile(ValueProfile)
+    case valueProfile(Cmp)
     case gep(GEP)
 }
 
@@ -59,7 +59,7 @@ extension Feature {
             self.intensity = UInt8(scoreFromByte(intensity))
         }
     }
-    public struct ValueProfile: Equatable, Hashable {
+    public struct Cmp: Equatable, Hashable {
         let pc: UInt
         let argxordist: UInt64
         //let arg1: UInt64
@@ -116,8 +116,8 @@ extension Feature.Indirect: Comparable {
     }
 }
 
-extension Feature.ValueProfile: Comparable {
-    public static func < (lhs: Feature.ValueProfile, rhs: Feature.ValueProfile) -> Bool {
+extension Feature.Cmp: Comparable {
+    public static func < (lhs: Feature.Cmp, rhs: Feature.Cmp) -> Bool {
         if lhs.pc < rhs.pc {
             return true
         } else if lhs.pc == rhs.pc {

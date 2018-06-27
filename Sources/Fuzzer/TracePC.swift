@@ -65,7 +65,7 @@ enum TracePC {
     private static var indirectFeatures: [Feature.Indirect] = []
     
     /// An array holding the `Feature`s describing comparisons.
-    private static var valueProfileFeatures: [Feature.ValueProfile] = []
+    private static var cmpFeatures: [Feature.Cmp] = []
     
     /// Handle a call to the sanitizer code coverage function `trace_pc_guard_init`
     /// It assigns a unique value to every pointer inside [start, stop). These values
@@ -101,7 +101,7 @@ enum TracePC {
         }
         
         indirectFeatures.sort()
-        valueProfileFeatures.sort()
+        cmpFeatures.sort()
 
         // Ensure we don't call `handle` with the same argument twice.
         // This works because the arrays are sorted.
@@ -110,20 +110,20 @@ enum TracePC {
             handle(f)
             last = f
         }
-        for f in valueProfileFeatures.lazy.map(Feature.valueProfile) where last != f {
+        for f in cmpFeatures.lazy.map(Feature.valueProfile) where last != f {
             handle(f)
             last = f
         }
     }
     
     static func handleTraceCmp <T: BinaryInteger & UnsignedInteger> (pc: NormalizedPC, arg1: T, arg2: T) {
-        valueProfileFeatures.append(.init(pc: pc.value, arg1: numericCast(arg1), arg2: numericCast(arg2)))
+        cmpFeatures.append(.init(pc: pc.value, arg1: numericCast(arg1), arg2: numericCast(arg2)))
     }
     
     static func resetTestRecordings() {
         eightBitCounters.assign(repeating: 0)
         indirectFeatures.removeAll(keepingCapacity: true)
-        valueProfileFeatures.removeAll(keepingCapacity: true)
+        cmpFeatures.removeAll(keepingCapacity: true)
     }
     
     static var recording = false

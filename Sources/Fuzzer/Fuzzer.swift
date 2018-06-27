@@ -357,6 +357,14 @@ extension Fuzzer {
         
         if info.settings.shuffleAtStartup {
             info.world.rand.shuffle(&units)
+        } else {
+            // Units added later weigh more heavily in the selection process.
+            // Therefore, sorting the units by complexity in descending order
+            // ensure we prefer mutating simpler units.
+
+            // TODO: not true anymore
+
+            units.sort { $0.complexity() > $1.complexity() }
         }
 
         for u in units {

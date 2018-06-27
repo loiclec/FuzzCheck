@@ -18,7 +18,7 @@ func trace_pc_guard(g: UnsafeMutablePointer<UInt32>?) {
     guard TracePC.recording, let g = g else { return }
     let pc = PC(bitPattern: __return_address())
     let idx = Int(g.pointee)
-    TracePC.PCs[idx] = pc
+    TracePC.edges[idx] = pc
     let (result, overflow) = TracePC.eightBitCounters[idx].addingReportingOverflow(1)
     if !overflow {
         TracePC.eightBitCounters[idx] = result
@@ -27,7 +27,7 @@ func trace_pc_guard(g: UnsafeMutablePointer<UInt32>?) {
 
 @_cdecl("__sanitizer_cov_trace_pc_guard_init")
 func trace_pc_guard_init(start: UnsafeMutablePointer<UInt32>, stop: UnsafeMutablePointer<UInt32>) {
-    TracePC.handleInit(start: start, stop: stop)
+    TracePC.handlePCGuardInit(start: start, stop: stop)
 }
 
 @_cdecl("__sanitizer_cov_trace_pc_indir")

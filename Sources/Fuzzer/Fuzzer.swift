@@ -48,7 +48,7 @@ public final class FuzzerInfo <T, World: FuzzerWorld> where World.Unit == T {
         let seconds = Double(now - processStartTime) / 1_000_000
         stats.executionsPerSecond = Int((Double(stats.totalNumberOfRuns) / seconds).rounded())
         stats.corpusSize = corpus.numActiveUnits
-        stats.totalPCCoverage = TracePC.getTotalPCCoverage()
+        stats.totalPCCoverage = TracePC.getTotalEdgeCoverage()
         stats.score = Int(corpus.coverageScore)
         stats.rss = Int(world.getPeakMemoryUsage())
     }

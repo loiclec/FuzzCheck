@@ -10,9 +10,9 @@ public protocol FuzzTest {
     var mutators: Mut { get }
     
     static func baseUnit() -> Unit
-    func newUnit(_ r: inout Rand) -> Unit
+    func initialUnits(_ r: inout Rand) -> [Unit]
     
-    func run(_ u: Unit)
+    func test(_ u: Unit)
 }
 
 public enum FuzzerTerminationStatus: Int32 {
@@ -43,7 +43,7 @@ public final class FuzzerInfo <T, World: FuzzerWorld> where World.Unit == T {
         self.world = world
     }
 
-    func updateStatsAfterRunAnalysis() {
+    func updateStats() {
         let now = world.clock()
         let seconds = Double(now - processStartTime) / 1_000_000
         stats.executionsPerSecond = Int((Double(stats.totalNumberOfRuns) / seconds).rounded())
@@ -102,7 +102,7 @@ public final class Fuzzer <FT: FuzzTest, World: FuzzerWorld> where World.Unit ==
 }
 
 extension Fuzzer where World == CommandLineFuzzerWorld<FT.Unit> {
-    public static func launch(fuzzTest: FT) {
+    public static func launch(fuzzTest: FT) throws {
         
         let (parser, settingsBinder, worldBinder, _) = CommandLineFuzzerWorldInfo.argumentsParser()
         do {
@@ -115,11 +115,12 @@ extension Fuzzer where World == CommandLineFuzzerWorld<FT.Unit> {
             let fuzzer = Fuzzer(fuzzTest: fuzzTest, settings: settings, world: CommandLineFuzzerWorld(info: world))
             switch fuzzer.info.settings.command {
             case .fuzz:
-                fuzzer.loop()
+                try fuzzer.loop()
             case .minimize:
-                fuzzer.minimizeLoop()
+                try fuzzer.minimizeLoop()
             case .read:
-                fuzzer.readAndExecuteInputFile()
+                fuzzer.info.unit = try fuzzer.info.world.readInputFile()
+                fuzzer.testCurrentUnit()
             }
         } catch let e {
             print(e)
@@ -175,17 +176,17 @@ extension Fuzzer {
         case nothing
     }
 
-    func runAndRecordTest() {
+    func testCurrentUnit() {
         TracePC.resetTestRecordings()
         
         TracePC.recording = true
-        _ = fuzzTest.run(info.unit)
+        _ = fuzzTest.test(info.unit)
         TracePC.recording = false
 
         info.stats.totalNumberOfRuns += 1
     }
 
-    func analyzeTestRecording() -> AnalysisResult {
+    func analyze() -> AnalysisResult {
         let currentUnitComplexity = info.unit.complexity()
         
         var uniqueFeatures: [Feature] = []
@@ -240,7 +241,7 @@ extension Fuzzer {
         
         let newUnitInfo = Info.Corpus.UnitInfo(
             unit: info.unit,
-            coverageScore: -1,
+            coverageScore: -1, // coverage score is unitialized
             initiallyUniqueFeatures: uniqueFeatures,
             initiallyReplacingBestUnitForFeatures: replacingFeatures.map { $0.0 },
             otherFeatures: otherFeatures
@@ -248,17 +249,18 @@ extension Fuzzer {
         return .new(newUnitInfo)
     }
     
-    func updateCorpusAfterAnalysis(result: AnalysisResult) {
+    func updateCorpusAfterAnalysis(_ result: AnalysisResult) throws {
         switch result {
         case .new(let unitInfo):
             let effect = info.corpus.append(unitInfo)
-            try! effect(&info.world)
+            try effect(&info.world)
+
             info.corpus.updateScoresAndWeights()
             
         case .replace(let index, let features, let complexity):
             let effect = info.corpus.replace(index, with: info.unit)
-            try! effect(&info.world)
-            
+            try effect(&info.world)
+
             for f in features {
                 let currentCount = info.corpus.allFeatures[f]!.0
                 info.corpus.allFeatures[f] = (currentCount, complexity, index)
@@ -270,10 +272,10 @@ extension Fuzzer {
         }
     }
     
-    func mutateAndTestOne() {
+    func processNextUnits() throws {
         let idx = info.corpus.chooseUnitIdxToMutate(&info.world.rand)
         guard let unit = info.corpus[idx].unit else {
-            fatalError("This should never happen, but any bug in the fuzzer might lead to this situation.")
+            fatalError("A previously deleted unit was selected. This should never happen, but any bug in the fuzzer might lead to this situation.")
         }
         info.unit = unit
         for _ in 0 ..< info.settings.mutateDepth {
@@ -281,19 +283,19 @@ extension Fuzzer {
             guard fuzzTest.mutators.mutate(&info.unit, &info.world.rand) else { break  }
             guard !info.corpus.forbiddenUnitHashes.contains(info.unit.hash()) else { continue }
             guard info.unit.complexity() < info.settings.maxUnitComplexity else { continue }
-            analyze()
+            try processCurrentUnit()
         }
     }
 
-    public func loop() {
+    public func loop() throws {
         info.processStartTime = info.world.clock()
         info.world.reportEvent(.updatedCorpus(.start), stats: info.stats)
         
-        readAndExecuteCorpora()
+        try processInitialUnits()
         info.world.reportEvent(.updatedCorpus(.didReadCorpus), stats: info.stats)
             
         while info.stats.totalNumberOfRuns < info.settings.maxNumberOfRuns {
-            mutateAndTestOne()
+            try processNextUnits()
         }
         info.world.reportEvent(.updatedCorpus(.done), stats: info.stats)
     }
@@ -303,11 +305,11 @@ extension Fuzzer {
         info.corpus.forbiddenUnitHashes.formUnion(units.map { $0.hash() })
     }
 
-    public func minimizeLoop() {
+    public func minimizeLoop() throws {
         info.processStartTime = info.world.clock()
         info.world.reportEvent(.updatedCorpus(.start), stats: info.stats)
-        try! addInputCorpusToForbidenCorpus()
-        let input = try! info.world.readInputFile()
+        try addInputCorpusToForbidenCorpus()
+        let input = try info.world.readInputFile()
         let newUnitInfo = Info.Corpus.UnitInfo(
             unit: input,
             coverageScore: 1,
@@ -320,17 +322,17 @@ extension Fuzzer {
         info.settings.maxUnitComplexity = input.complexity().nextDown
         info.world.reportEvent(.updatedCorpus(.didReadCorpus), stats: info.stats)
         while info.stats.totalNumberOfRuns < info.settings.maxNumberOfRuns {
-            mutateAndTestOne()
+            try processNextUnits()
         }
         info.world.reportEvent(.updatedCorpus(.done), stats: info.stats)
     }
     
-    func analyze() {
-        runAndRecordTest()
+    func processCurrentUnit() throws {
+        testCurrentUnit()
         
-        let res = analyzeTestRecording()
-        updateCorpusAfterAnalysis(result: res)
-        info.updateStatsAfterRunAnalysis()
+        let res = analyze()
+        try updateCorpusAfterAnalysis(res)
+        info.updateStats()
         
         guard let event: FuzzerEvent = {
             switch res {
@@ -345,27 +347,21 @@ extension Fuzzer {
         info.world.reportEvent(event, stats: info.stats)
     }
     
-    public func readAndExecuteInputFile() {
-        info.unit = try! info.world.readInputFile()
-        runAndRecordTest()
-    }
-    
-    func readAndExecuteCorpora() { // FIXME: name
-        var units = (try! info.world.readInputCorpus())
+    func processInitialUnits() throws {
+        var units = try info.world.readInputCorpus()
         if units.isEmpty {
-            units.append(FT.baseUnit())
-            fatalError()
+            units += fuzzTest.initialUnits(&info.world.rand)
         }
+        // Filter the units that are too complex
+        units = units.filter { $0.complexity() <= info.settings.maxUnitComplexity }
         
         if info.settings.shuffleAtStartup {
             info.world.rand.shuffle(&units)
         }
-        // TODO: prefer small
-        
+
         for u in units {
-            // TODO: max complexity
             info.unit = u
-            analyze()
+            try processCurrentUnit()
         }
     }
 }

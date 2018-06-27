@@ -146,13 +146,16 @@ struct FT : FuzzTest {
          return Graph()
     }
     
-    func newUnit(_ r: inout Rand) -> Unit {
-        var g = Graph<UInt8>()
-//        var g = Graph<Nothing>()
-        for _ in 0 ..< r.positiveInt(10) {
-            _ = mutators.mutate(&g, &r)
+    func initialUnits(_ r: inout Rand) -> [Unit] {
+        
+        return (1 ... 10).map { i in
+            var g = Graph<UInt8>()
+            for _ in 0 ..< (i * 10) {
+                _ = mutators.mutate(&g, &r)
+            }
+            return g
         }
-        return g
+        
         /*
         var x = FT.baseUnit()
         for _ in 0 ..< 100 {
@@ -162,7 +165,7 @@ struct FT : FuzzTest {
          */
     }
     
-    func run(_ x: Unit) {
+    func test(_ x: Unit) {
         //var x = x
         
         //let idx = x.partition(by: { $0 >= 10 })
@@ -312,4 +315,4 @@ struct FT : FuzzTest {
 
 let graphMutators = GraphMutators(vertexMutators: UnsignedIntegerMutators<UInt8>(), initializeVertex: { r in r.byte() })
 
-CommandLineFuzzer.launch(fuzzTest: FT())
+try CommandLineFuzzer.launch(fuzzTest: FT())

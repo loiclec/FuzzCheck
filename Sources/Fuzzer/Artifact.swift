@@ -77,6 +77,7 @@ public enum ArtifactKind: String, Codable {
     case unit
     case timeout
     case crash
+    case testFailure
 }
 
 public struct ArtifactNameWithoutIndex: Hashable {

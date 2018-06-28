@@ -11,6 +11,7 @@ import Foundation
 public enum FuzzerEvent {
     case updatedCorpus(FuzzerUpdateKind)
     case caughtSignal(Signal)
+    case testFailure
 }
 
 public protocol FuzzerWorld {
@@ -183,6 +184,8 @@ public struct CommandLineFuzzerWorld <Unit: FuzzUnit> : FuzzerWorld {
             default:
                 print("\n================ SIGNAL \(signal) ================")
             }
+        case .testFailure:
+            print("\n================ TEST FAILED ================")
         }
         print("\(stats.totalNumberOfRuns)", terminator: "\t")
         print("cov: \(stats.totalPCCoverage)", terminator: "\t")

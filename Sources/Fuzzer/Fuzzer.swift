@@ -12,13 +12,14 @@ public protocol FuzzTest {
     static func baseUnit() -> Unit
     func initialUnits(_ r: inout Rand) -> [Unit]
     
-    func test(_ u: Unit)
+    func test(_ u: Unit) -> Bool
 }
 
 public enum FuzzerTerminationStatus: Int32 {
     case success = 0
     case crash = 1
-    case unknown = 2
+    case testFailure = 2
+    case unknown = 3
 }
 /*
  For some reason having the fuzzer be generic over FuzzTest and containing the SignalsHandler was a problem.
@@ -180,7 +181,14 @@ extension Fuzzer {
         TracePC.resetTestRecordings()
         
         TracePC.recording = true
-        _ = fuzzTest.test(info.unit)
+        guard fuzzTest.test(info.unit) else {
+            info.world.reportEvent(.testFailure, stats: info.stats)
+            var features: [Feature] = []
+            TracePC.collectFeatures { features.append($0) }
+            try! info.world.saveArtifact(unit: info.unit, features: features, coverage: nil, complexity: info.unit.complexity(), hash: nil, kind: .testFailure)
+            exit(FuzzerTerminationStatus.testFailure.rawValue)
+        }
+        
         TracePC.recording = false
 
         info.stats.totalNumberOfRuns += 1

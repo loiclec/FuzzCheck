@@ -165,7 +165,7 @@ struct FT : FuzzTest {
          */
     }
     
-    func test(_ x: Unit) {
+    func test(_ x: Unit) -> Bool {
         //var x = x
         
         //let idx = x.partition(by: { $0 >= 10 })
@@ -310,6 +310,7 @@ struct FT : FuzzTest {
                 fatalError("You found the crash!")
             }
         }*/
+        return true
     }
 }
 

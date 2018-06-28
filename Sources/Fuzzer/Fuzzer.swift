@@ -61,7 +61,7 @@ public final class FuzzerInfo <T, World: FuzzerWorld> where World.Unit == T {
             TracePC.crashed = true
             var features: [Feature] = []
             TracePC.collectFeatures { features.append($0) }
-            try! world.saveArtifact(unit: unit, features: features, coverage: nil, complexity: unit.complexity(), hash: nil, kind: .crash)
+            try! world.saveArtifact(unit: unit, features: nil, coverage: nil, complexity: unit.complexity(), hash: nil, kind: .crash)
             exit(FuzzerTerminationStatus.crash.rawValue)
             
         case .interrupt:
@@ -185,7 +185,7 @@ extension Fuzzer {
             info.world.reportEvent(.testFailure, stats: info.stats)
             var features: [Feature] = []
             TracePC.collectFeatures { features.append($0) }
-            try! info.world.saveArtifact(unit: info.unit, features: features, coverage: nil, complexity: info.unit.complexity(), hash: nil, kind: .testFailure)
+            try! info.world.saveArtifact(unit: info.unit, features: nil, coverage: nil, complexity: info.unit.complexity(), hash: nil, kind: .testFailure)
             exit(FuzzerTerminationStatus.testFailure.rawValue)
         }
         
@@ -289,7 +289,6 @@ extension Fuzzer {
         for _ in 0 ..< info.settings.mutateDepth {
             guard info.stats.totalNumberOfRuns < info.settings.maxNumberOfRuns else { break }
             guard fuzzTest.mutators.mutate(&info.unit, &info.world.rand) else { break  }
-            guard !info.corpus.forbiddenUnitHashes.contains(info.unit.hash()) else { continue }
             guard info.unit.complexity() < info.settings.maxUnitComplexity else { continue }
             try processCurrentUnit()
         }
@@ -308,15 +307,9 @@ extension Fuzzer {
         info.world.reportEvent(.updatedCorpus(.done), stats: info.stats)
     }
     
-    func addInputCorpusToForbidenCorpus() throws {
-        let units = try info.world.readInputCorpus()
-        info.corpus.forbiddenUnitHashes.formUnion(units.map { $0.hash() })
-    }
-
     public func minimizeLoop() throws {
         info.processStartTime = info.world.clock()
         info.world.reportEvent(.updatedCorpus(.start), stats: info.stats)
-        try addInputCorpusToForbidenCorpus()
         let input = try info.world.readInputFile()
         let newUnitInfo = Info.Corpus.UnitInfo(
             unit: input,

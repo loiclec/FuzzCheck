@@ -165,7 +165,7 @@ struct FT : FuzzTest {
          */
     }
     
-    func test(_ x: Unit) -> Bool {
+    func test(_ g: Unit) -> Bool {
         //var x = x
         
         //let idx = x.partition(by: { $0 >= 10 })
@@ -212,13 +212,13 @@ struct FT : FuzzTest {
         }
         */
         
-        let comp = x.stronglyConnectedComponents()
+        let comp = g.stronglyConnectedComponents()
         if comp.count >= 3,
             comp[0].count >= 3,
             comp[1].count >= 3,
             comp[2].count >= 3
         {
-            fatalError()
+            return false
         }
         
         //g.crashIfCyclic()
@@ -278,7 +278,7 @@ struct FT : FuzzTest {
             g.graph[4].edges.count == 0,
             g.graph[5].edges.count == 0
         {
-            fatalError("You found the crash!")
+            return false
         }
         */
         

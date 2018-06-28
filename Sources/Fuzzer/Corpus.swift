@@ -43,7 +43,6 @@ extension FuzzerInfo {
         var coverageScore: Double = 0
         var allFeatures: [Feature: (Int, Double, CorpusIndex)] = [:]
         
-        var forbiddenUnitHashes: Set<Int> = []
         var favoredUnit: UnitInfo? = nil
     }
 }

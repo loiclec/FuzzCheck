@@ -1,4 +1,14 @@
 
+public protocol FuzzUnitGenerator {
+    associatedtype Unit
+    associatedtype Mut: Mutators where Mut.Mutated == Unit
+    
+    var mutators: Mut { get }
+    
+    func baseUnit() -> Unit
+    func initialUnits(_ r: inout Rand) -> [Unit]
+}
+
 public protocol FuzzUnit: Codable {
     func complexity() -> Double
     func hash() -> Int

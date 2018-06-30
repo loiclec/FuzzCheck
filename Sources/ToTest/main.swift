@@ -130,24 +130,15 @@ struct NothingMutators: Mutators {
 
 extension UInt8: FuzzUnit { }
 
-struct FT : FuzzTest {
-     typealias Unit = Graph<UInt8>
-    // typealias Unit = Graph<Nothing>
-//    typealias Unit = [UInt8]
-//    typealias Mut = ArrayMutators<UnsignedIntegerMutators<UInt8>>
+struct GraphGenerator : FuzzUnitGenerator {
+    typealias Unit = Graph<UInt8>
     typealias Mut = GraphMutators<UnsignedIntegerMutators<UInt8>>
-    
-//    var mutators: FT.Mut = ArrayMutators(initializeElement: { $0.byte() }, elementMutators: UnsignedIntegerMutators.init())
-      var mutators = GraphMutators(vertexMutators: UnsignedIntegerMutators.init(), initializeVertex: { r in r.byte() })
-//    var mutators: FT.Mut = GraphMutators(vertexMutators: NothingMutators(), initializeVertex: { r in Nothing() })
-    
-    static func baseUnit() -> Unit {
-//        return []
+
+    var mutators = GraphMutators(vertexMutators: UnsignedIntegerMutators.init(), initializeVertex: { r in r.byte() })
+    func baseUnit() -> Unit {
          return Graph()
     }
-    
     func initialUnits(_ r: inout Rand) -> [Unit] {
-        
         return (1 ... 10).map { i in
             var g = Graph<UInt8>()
             for _ in 0 ..< (i * 10) {
@@ -155,165 +146,37 @@ struct FT : FuzzTest {
             }
             return g
         }
-        
-        /*
-        var x = FT.baseUnit()
-        for _ in 0 ..< 100 {
-            _ = mutators.mutate(&x, &r)
-        }
-        return x
-         */
     }
-    
-    func test(_ g: Unit) -> Bool {
-        //var x = x
-        
-        //let idx = x.partition(by: { $0 >= 10 })
-        //guard x.indices.contains(idx) || idx == g.endIndex else {
-        //    fatalError("You found a crash!")
-        //}
-        //x.sort()
-        /*
-        for i in 0 ..< idx {
-            guard x[i] < 10 else {
-                print(idx, i, x[i])
-                fatalError("You found a crash!")
-            }
-        }
-        for i in idx ..< x.endIndex {
-            guard x[i] >= 10 else {
-                print(idx, i, x[i])
-                fatalError("You found a crash!")
-            }
-        }*/
-        /*
-        let idx = x.stablePartition(count: x.count, isSuffixElement: { $0 > 0 })
-        if
-            idx == 1,
-            x.count > 0,
-            x[0] == 1,
-            x.count > 1,
-            x[1] == 1,
-            x.count > 2,
-            x[2] == 8,
-            x.count > 3,
-            x[3] == 8,
-            x.count > 4,
-            x[4] == 9,
-            x.count > 5,
-            x[5] == 12,
-            x.count > 6,
-            x[6] == 89,
-            x.count > 7,
-            x[7] == 125
-        {
-            print(x)
-            fatalError("You found a crash!")
-        }
-        */
-        
-        let comp = g.stronglyConnectedComponents()
-        if comp.count >= 3,
-            comp[0].count >= 3,
-            comp[1].count >= 3,
-            comp[2].count >= 3
-        {
-            return false
-        }
-        
-        //g.crashIfCyclic()
-        /*
-        if
-            g.count == 10,
-            g.graph[0].data == 0x64,
-            g.graph[1].data == 0x65,
-            g.graph[2].data == 0x61,
-            g.graph[3].data == 0x64,
-            g.graph[4].data == 0x62,
-            g.graph[5].data == 0x65,
-            g.graph[6].data == 0x65,
-            g.graph[7].data == 0x67,
-            g.graph[8].data == 0x68,
-            g.graph[9].data == 0x69,
-            g.graph[0].edges.count == 2,
-            g.graph[0].edges[0] == 1,
-            g.graph[0].edges[1] == 2,
-            g.graph[1].edges.count == 2,
-            g.graph[1].edges[0] == 3,
-            g.graph[1].edges[1] == 4,
-            g.graph[2].edges.count == 2,
-            g.graph[2].edges[0] == 5,
-            g.graph[2].edges[1] == 6,
-            g.graph[3].edges.count == 2,
-            g.graph[3].edges[0] == 7,
-            g.graph[3].edges[1] == 8,
-            g.graph[4].edges.count == 1,
-            g.graph[4].edges[0] == 9,
-            g.graph[5].edges.count == 0,
-            g.graph[6].edges.count == 0,
-            g.graph[7].edges.count == 0,
-            g.graph[8].edges.count == 0,
-            g.graph[9].edges.count == 0
-        {
-            fatalError()
-        }
-        */
-        /*
-        if g.count == 6,
-            g.graph[0].data == 0x64,
-            g.graph[1].data == 0x65,
-            g.graph[2].data == 0x61,
-            g.graph[3].data == 0x64,
-            g.graph[4].data == 0x62,
-            g.graph[5].data == 0x65,
-            g.graph[0].edges.count == 2,
-            g.graph[0].edges[0] == 1,
-            g.graph[0].edges[1] == 2,
-            g.graph[1].edges.count == 2,
-            g.graph[1].edges[0] == 3,
-            g.graph[1].edges[1] == 4,
-            g.graph[2].edges.count == 1,
-            g.graph[2].edges[0] == 5,
-            g.graph[3].edges.count == 0,
-            g.graph[4].edges.count == 0,
-            g.graph[5].edges.count == 0
-        {
-            return false
-        }
-        */
-        
-        /*
-        if g.count == 6 {
-            var x = 0
+}
 
-            if g.graph[0].data == 0x64 { x += 1 }
-            if g.graph[1].data == 0x65 { x += 1 }
-            if g.graph[2].data == 0x61 { x += 1 }
-            if g.graph[3].data == 0x64 { x += 1 }
-            if g.graph[4].data == 0x62 { x += 1 }
-            if g.graph[5].data == 0x65 { x += 1 }
-            if g.graph[0].edges.count == 2 {
-                if g.graph[0].edges[0] == 1 { x += 1 }
-                if g.graph[0].edges[1] == 2 { x += 1 }
-            }
-            if g.graph[1].edges.count == 2 {
-                if g.graph[1].edges[0] == 3 { x += 1 }
-                if g.graph[1].edges[1] == 4 { x += 1 }
-            }
-            if g.graph[2].edges.count == 1 {
-                if g.graph[2].edges[0] == 5 { x += 1 }
-            }
-            if g.graph[3].edges.count == 0 { x += 1 }
-            if g.graph[4].edges.count == 0 { x += 1 }
-            if g.graph[5].edges.count == 0 { x += 1 }
-            if x >= 8 {
-                fatalError("You found the crash!")
-            }
-        }*/
+func test(_ g: Graph<UInt8>) -> Bool {
+     if
+        g.count == 6,
+        g.graph[0].data == 0x64,
+        g.graph[1].data == 0x65,
+        g.graph[2].data == 0x61,
+        g.graph[3].data == 0x64,
+        g.graph[4].data == 0x62,
+        g.graph[5].data == 0x65,
+        g.graph[0].edges.count == 2,
+        g.graph[0].edges[0] == 1,
+        g.graph[0].edges[1] == 2,
+        g.graph[1].edges.count == 2,
+        g.graph[1].edges[0] == 3,
+        g.graph[1].edges[1] == 4,
+        g.graph[2].edges.count == 1,
+        g.graph[2].edges[0] == 5,
+        g.graph[3].edges.count == 0,
+        g.graph[4].edges.count == 0,
+        g.graph[5].edges.count == 0
+     {
+        return false
+     }
+     else {
         return true
     }
 }
 
 let graphMutators = GraphMutators(vertexMutators: UnsignedIntegerMutators<UInt8>(), initializeVertex: { r in r.byte() })
 
-try CommandLineFuzzer.launch(fuzzTest: FT())
+try CommandLineFuzzer.launch(test: test, generator: GraphGenerator())

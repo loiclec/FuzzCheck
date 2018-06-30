@@ -3,18 +3,6 @@ import Basic
 import Darwin
 import Foundation
 
-public protocol FuzzTest {
-    associatedtype Unit
-    associatedtype Mut: Mutators where Mut.Mutated == Unit
-    
-    var mutators: Mut { get }
-    
-    static func baseUnit() -> Unit
-    func initialUnits(_ r: inout Rand) -> [Unit]
-    
-    func test(_ u: Unit) -> Bool
-}
-
 public enum FuzzerTerminationStatus: Int32 {
     case success = 0
     case crash = 1
@@ -73,20 +61,21 @@ public final class FuzzerInfo <T, World: FuzzerWorld> where World.Unit == T {
     }
 }
 
-public typealias CommandLineFuzzer <FT: FuzzTest> = Fuzzer<FT, CommandLineFuzzerWorld<FT.Unit>>
+public typealias CommandLineFuzzer <UnitGen: FuzzUnitGenerator> = Fuzzer<UnitGen, CommandLineFuzzerWorld<UnitGen.Unit>>
 
-public final class Fuzzer <FT: FuzzTest, World: FuzzerWorld> where World.Unit == FT.Unit {
+public final class Fuzzer <UnitGen: FuzzUnitGenerator, World: FuzzerWorld> where World.Unit == UnitGen.Unit {
     
-    typealias Info = FuzzerInfo<FT.Unit, World>
+    typealias Info = FuzzerInfo<UnitGen.Unit, World>
     
     let info: Info
-    
-    let fuzzTest: FT
+    let generator: UnitGen
+    let test: (UnitGen.Unit) -> Bool
     let signalsHandler: SignalsHandler
     
-    public init(fuzzTest: FT, settings: FuzzerSettings, world: World) {
-        self.fuzzTest = fuzzTest
-        self.info = Info(unit: FT.baseUnit(), settings: settings, world: world)
+    public init(test: @escaping (UnitGen.Unit) -> Bool, generator: UnitGen, settings: FuzzerSettings, world: World) {
+        self.generator = generator
+        self.test = test
+        self.info = Info(unit: generator.baseUnit(), settings: settings, world: world)
     
         let signals: [Signal] = [.segmentationViolation, .busError, .abort, .illegalInstruction, .floatingPointException, .interrupt, .softwareTermination, .fileSizeLimitExceeded]
         
@@ -102,8 +91,8 @@ public final class Fuzzer <FT: FuzzTest, World: FuzzerWorld> where World.Unit ==
     }
 }
 
-extension Fuzzer where World == CommandLineFuzzerWorld<FT.Unit> {
-    public static func launch(fuzzTest: FT) throws {
+extension Fuzzer where World == CommandLineFuzzerWorld<UnitGen.Unit> {
+    public static func launch(test: @escaping (UnitGen.Unit) -> Bool, generator: UnitGen) throws {
         
         let (parser, settingsBinder, worldBinder, _) = CommandLineFuzzerWorldInfo.argumentsParser()
         do {
@@ -113,7 +102,7 @@ extension Fuzzer where World == CommandLineFuzzerWorld<FT.Unit> {
             var world: CommandLineFuzzerWorldInfo = CommandLineFuzzerWorldInfo()
             try worldBinder.fill(parseResult: res, into: &world)
 
-            let fuzzer = Fuzzer(fuzzTest: fuzzTest, settings: settings, world: CommandLineFuzzerWorld(info: world))
+            let fuzzer = Fuzzer(test: test, generator: generator, settings: settings, world: CommandLineFuzzerWorld(info: world))
             switch fuzzer.info.settings.command {
             case .fuzz:
                 try fuzzer.loop()
@@ -181,7 +170,7 @@ extension Fuzzer {
         TracePC.resetTestRecordings()
         
         TracePC.recording = true
-        guard fuzzTest.test(info.unit) else {
+        guard test(info.unit) else {
             info.world.reportEvent(.testFailure, stats: info.stats)
             var features: [Feature] = []
             TracePC.collectFeatures { features.append($0) }
@@ -288,7 +277,7 @@ extension Fuzzer {
         info.unit = unit
         for _ in 0 ..< info.settings.mutateDepth {
             guard info.stats.totalNumberOfRuns < info.settings.maxNumberOfRuns else { break }
-            guard fuzzTest.mutators.mutate(&info.unit, &info.world.rand) else { break  }
+            guard generator.mutators.mutate(&info.unit, &info.world.rand) else { break  }
             guard info.unit.complexity() < info.settings.maxUnitComplexity else { continue }
             try processCurrentUnit()
         }
@@ -351,7 +340,7 @@ extension Fuzzer {
     func processInitialUnits() throws {
         var units = try info.world.readInputCorpus()
         if units.isEmpty {
-            units += fuzzTest.initialUnits(&info.world.rand)
+            units += generator.initialUnits(&info.world.rand)
         }
         // Filter the units that are too complex
         units = units.filter { $0.complexity() <= info.settings.maxUnitComplexity }

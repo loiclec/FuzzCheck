@@ -26,7 +26,7 @@ let childProcessLock = Lock()
 func childProcessInfo(settings: FuzzerManagerSettings) -> (ref: Ref<Process>, launchPath: String, env: [String: String]) {
     let exec = settings.testExecutable!
     var fuzzerJobEnvironment = ProcessInfo.processInfo.environment
-    fuzzerJobEnvironment["SWIUnitGen_DETERMINISTIC_HASHING"] = "1"
+    fuzzerJobEnvironment["SWIFT_DETERMINISTIC_HASHING"] = "1"
     let process = Ref(Process())
     let launchPath = exec.path
     let environment = fuzzerJobEnvironment

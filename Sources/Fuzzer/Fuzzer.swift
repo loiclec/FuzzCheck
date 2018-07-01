@@ -229,12 +229,6 @@ extension Fuzzer {
             //       properties, so it is not a loss if we lose them. But is that true?
             if replacingFeatures.lazy.map({$0.0}) == (oldUnitInfo.initiallyUniqueFeatures + oldUnitInfo.initiallyReplacingBestUnitForFeatures) {
                 return .replace(index: index, features: replacingFeatures.map{$0.0}, complexity: currentUnitComplexity)
-            } else {
-                // else if the old unit had more features than the current unit,
-                // then the current unit is not interesting at all and we ignore it
-                // TODO: is that true? maybe there is some value in keeping simpler,
-                //       less interesting units anyway? Just give them a low score.
-                return .nothing
             }
         }
         

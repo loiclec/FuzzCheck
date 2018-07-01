@@ -143,12 +143,12 @@ extension FuzzerInfo.Corpus {
     }
     
     func chooseUnitIdxToMutate(_ r: inout Rand) -> CorpusIndex {
-        if favoredUnit != nil, r.positiveInt(4) == 0 {
+        if favoredUnit != nil, r.bool(odds: 0.25) {
             return .favored
         } else if units.isEmpty {
             return .favored
         } else {
-            let x = r.weightedPickIndex(cumulativeWeights: cumulativeWeights)
+            let x = r.weightedRandomElement(cumulativeWeights: cumulativeWeights, minimum: 0)
             return .normal(x)
         }
     }

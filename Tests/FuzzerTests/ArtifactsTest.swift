@@ -8,6 +8,7 @@ import XCTest
 @testable import Fuzzer
 
 class ArtifactsTests: XCTestCase {
+    /*
     func testParse() {
         let s = "??kind-?complexity?-?hash-?index"
         let ext = ""
@@ -27,5 +28,5 @@ class ArtifactsTests: XCTestCase {
         let artName = artNameInfo.name(following: schema)
         //print(artName)
         print(artName.fillGapToBeUnique(from: existing))
-    }
+    }*/
 }

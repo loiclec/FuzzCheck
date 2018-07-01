@@ -1,6 +1,7 @@
 
 
 import Fuzzer
+import DefaultFuzzUnitGenerators
 import ModuleToTest
 
 struct Pair <A, B> : Codable where A: Codable, B: Codable {
@@ -110,8 +111,8 @@ public struct GraphMutators <VM: Mutators> : Mutators where VM.Mutated: Hashable
     func copySubset(_ x: inout Mutated, _ r: inout Rand) -> Bool {
         guard !x.isEmpty else { return false }
         var corresponding: [Int: Int] = [:]
-        for _ in 0 ..< r.positiveInt(x.count) {
-            let copiedVertexIdx = r.positiveInt(x.count)
+        for _ in 0 ..< (1 ... x.count).randomElement(using: &r)! {
+            let copiedVertexIdx = x.indices.randomElement(using: &r)!
             if corresponding[copiedVertexIdx] == nil {
                 corresponding[copiedVertexIdx] = x.addVertex(x.graph[copiedVertexIdx].data)
             }
@@ -132,65 +133,75 @@ public struct GraphMutators <VM: Mutators> : Mutators where VM.Mutated: Hashable
     }
     
     func splitEdge(_ x: inout Mutated, _ r: inout Rand) -> Bool {
-        guard !x.isEmpty else { return false }
-        let vi = r.positiveInt(x.count)
-        let v = x.graph[vi]
-        guard !v.edges.isEmpty else { return false }
-        let ei = r.positiveInt(v.edges.count)
-        let e = v.edges[ei]
-        x.removeEdge(from: vi, to: ei)
-        let newV = x.addVertex(initializeVertex(&r))
-        x.addEdge(from: vi, to: newV)
-        x.addEdge(from: newV, to: e)
+        
+        guard let fromIndex = x.indices.randomElement(using: &r) else {
+            return false
+        }
+        let fromData = x.graph[fromIndex]
+        
+        guard let oldDestEdgeIndex = fromData.edges.indices.randomElement(using: &r) else {
+            return false
+        }
+        
+        let oldDest = fromData.edges[oldDestEdgeIndex]
+        x.removeEdge(from: fromIndex, to: oldDestEdgeIndex)
+        let newVertex = x.addVertex(initializeVertex(&r))
+        x.addEdge(from: fromIndex, to: newVertex)
+        x.addEdge(from: newVertex, to: oldDest)
         return true
     }
     
     func addFriend(_ x: inout Mutated, _ r: inout Rand) -> Bool {
-        guard !x.isEmpty else { return false }
-        let vi = r.positiveInt(x.count)
-        let newV = x.addVertex(initializeVertex(&r))
-        x.addEdge(from: vi, to: newV)
-        x.addEdge(from: newV, to: vi)
+        guard let from = x.indices.randomElement(using: &r) else {
+            return false
+        }
+        let newVertex = x.addVertex(initializeVertex(&r))
+        x.addEdge(from: from, to: newVertex)
         return true
     }
     
     func moveEdge(_ x: inout Mutated, _ r: inout Rand) -> Bool {
-        guard !x.isEmpty else { return false }
-        let vi = r.positiveInt(x.count)
-        let v = x.graph[vi]
-        guard !v.edges.isEmpty else { return false }
-        let ei = r.positiveInt(v.edges.count)
-        x.removeEdge(from: vi, to: ei)
-        let otherV = r.positiveInt(x.count)
-        x.addEdge(from: vi, to: otherV)
+        guard let fromIndex = x.indices.randomElement(using: &r) else {
+            return false
+        }
+        let fromData = x.graph[fromIndex]
+        guard let oldDest = fromData.edges.indices.randomElement(using: &r) else {
+            return false
+        }
+        x.removeEdge(from: fromIndex, to: oldDest)
+        let newDest = x.indices.randomElement(using: &r)!
+        x.addEdge(from: fromIndex, to: newDest)
         return true
     }
     
     func addEdge(_ x: inout Mutated, _ r: inout Rand) -> Bool {
         guard !x.isEmpty else { return false }
-        let vi = r.positiveInt(x.count)
-        let vj = r.positiveInt(x.count)
+        let vi = x.indices.randomElement(using: &r)!
+        let vj = x.indices.randomElement(using: &r)!
         x.addEdge(from: vi, to: vj)
         return true
     }
     func addEdges(_ x: inout Mutated, _ r: inout Rand) -> Bool {
-        guard !x.isEmpty else { return false }
-        let vi = r.positiveInt(x.count)
+        guard let vi = x.indices.randomElement(using: &r) else {
+            return false
+        }
         
-        let count = r.positiveInt(r.bool() ? 20 : x.graph.count)
+        let count = (1 ... x.graph.count).randomElement(using: &r)!
         for _ in 0 ..< count {
-            let vj = r.positiveInt(x.count)
+            let vj = x.indices.randomElement(using: &r)!
             x.addEdge(from: vi, to: vj)
         }
         return true
     }
     
     func removeEdge(_ x: inout Mutated, _ r: inout Rand) -> Bool {
-        guard !x.isEmpty else { return false }
-        let vi = r.positiveInt(x.count)
+        guard let vi = x.indices.randomElement(using: &r) else {
+            return false
+        }
         let v = x.graph[vi]
-        guard !v.edges.isEmpty else { return false }
-        let ei = r.positiveInt(v.edges.count)
+        guard let ei = v.edges.indices.randomElement(using: &r) else {
+            return false
+        }
         x.removeEdge(from: vi, to: ei)
         return true
     }
@@ -200,7 +211,7 @@ public struct GraphMutators <VM: Mutators> : Mutators where VM.Mutated: Hashable
         return true
     }
     func addVertices(_ x: inout Mutated, _ r: inout Rand) -> Bool {
-        let count = r.positiveInt(max(20, x.graph.count))
+        let count = (1 ... max(20, x.count)).randomElement(using: &r)!
         for _ in 0 ..< count {
             _ = x.addVertex(initializeVertex(&r))
         }
@@ -209,7 +220,7 @@ public struct GraphMutators <VM: Mutators> : Mutators where VM.Mutated: Hashable
     
     func removeVertex(_ x: inout Mutated, _ r: inout Rand) -> Bool {
         guard !x.isEmpty else { return false }
-        let i = r.int(inside: x.graph.indices)
+        let i = x.graph.indices.randomElement(using: &r)!
         x.removeVertex(i)
         return true
     }
@@ -217,16 +228,14 @@ public struct GraphMutators <VM: Mutators> : Mutators where VM.Mutated: Hashable
     func modifyVertexData(_ x: inout Mutated, _ r: inout Rand) -> Bool {
         guard !x.isEmpty else { return false }
         
-        let i = r.int(inside: x.graph.indices)
+        let i = x.graph.indices.randomElement(using: &r)!
         return vertexMutators.mutate(&x.graph[i].data, &r)
     }
     
-    public let weightedMutators: [(Mutator, UInt64)] = [
-        (.addVertices, 1),
-        (.addEdges, 2),
-        (.copySubset, 3),
-        (.splitEdge, 11),
-        (.addFriend, 16),
+    public let weightedMutators: [(Mutator, UInt)] = [
+        (.addVertices, 5),
+        (.addEdges, 10),
+        (.addFriend, 30),
         (.moveEdge, 47),
         (.addEdge, 77),
         (.removeEdge, 87),
@@ -237,28 +246,30 @@ public struct GraphMutators <VM: Mutators> : Mutators where VM.Mutated: Hashable
     
 }
 
-public var x = 0
+public struct GraphGenerator : FuzzUnitGenerator {
+    public typealias Unit = Graph<UInt8>
+    public typealias Mut = GraphMutators<IntegerMutators<UInt8>>
+    
+    public let mutators = GraphMutators(vertexMutators: IntegerMutators(), initializeVertex: { r in r.next() as UInt8 })
+    public let baseUnit: Unit = Graph()
 
-public func noop() {
-    x += 1
+    public init() { }
 }
 
-extension RandomAccessCollection where Self: MutableCollection, Self: RangeReplaceableCollection {
-    mutating func removeAll(where match: (Element) -> Bool) {
-        guard !self.isEmpty else { return }
-        
-        var limit = startIndex
-        for j in indices where !match(self[j]) {
-            swapAt(limit, j)
-            formIndex(after: &limit)
-        }
-        let removeFrom = limit
-        
-        formIndex(after: &limit)
-        if limit < endIndex {
-            swapAt(limit, index(before: endIndex))
-        }
-        
-        removeLast(distance(from: removeFrom, to: endIndex))
+struct Nothing: Hashable { }
+extension Nothing: FuzzUnit {
+    func complexity() -> Double {
+        return 1.0
+    }
+    func hash() -> Int {
+        return 0.hashValue
     }
 }
+struct NothingMutators: Mutators {
+    func mutate(_ unit: inout Nothing, with mutator: Void, _ rand: inout Rand) -> Bool { return false }
+    let weightedMutators: [(Mutator, UInt)] = []
+    typealias Mutated = Nothing
+    typealias Mutator = Void
+}
+
+extension UInt8: FuzzUnit { }

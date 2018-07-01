@@ -19,10 +19,12 @@ let package = Package(
         .target(name: "Fuzzer", dependencies: ["Files", "Utility", "CBuiltinsNotAvailableInSwift"]),
         .target(name: "FuzzerJobsManager", dependencies: ["Files", "Fuzzer", "Utility"]),
         .target(name: "ModuleToTest", dependencies: []),
-        .target(name: "ModuleToTestMutators", dependencies: ["Fuzzer", "ModuleToTest"]),
-        .target(name: "ToTest", dependencies: ["Fuzzer", "ModuleToTest", "ModuleToTestMutators", "Utility"]),
+        .target(name: "ModuleToTestMutators", dependencies: ["Fuzzer", "ModuleToTest", "DefaultFuzzUnitGenerators"]),
+        .target(name: "ToTest", dependencies: ["Fuzzer", "DefaultFuzzUnitGenerators", "ModuleToTest", "ModuleToTestMutators", "Utility"]),
         .target(name: "ReadGraph", dependencies: ["ModuleToTest", "ModuleToTestMutators"]),
-        .testTarget(name: "FuzzerTests", dependencies: ["Fuzzer"])
+        .target(name: "DefaultFuzzUnitGenerators", dependencies: ["Fuzzer"]),
+        .testTarget(name: "FuzzerTests", dependencies: ["Fuzzer"]),
+        .testTarget(name: "GraphGeneratorTests", dependencies: ["Fuzzer", "ModuleToTest", "ModuleToTestMutators"])
     ],
     fuzzedTargets: ["ToTest", "ModuleToTest"]
 )

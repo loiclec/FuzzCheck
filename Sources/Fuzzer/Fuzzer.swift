@@ -75,7 +75,7 @@ public final class Fuzzer <UnitGen: FuzzUnitGenerator, World: FuzzerWorld> where
     public init(test: @escaping (UnitGen.Unit) -> Bool, generator: UnitGen, settings: FuzzerSettings, world: World) {
         self.generator = generator
         self.test = test
-        self.info = Info(unit: generator.baseUnit(), settings: settings, world: world)
+        self.info = Info(unit: generator.baseUnit, settings: settings, world: world)
     
         let signals: [Signal] = [.segmentationViolation, .busError, .abort, .illegalInstruction, .floatingPointException, .interrupt, .softwareTermination, .fileSizeLimitExceeded]
         
@@ -168,16 +168,18 @@ extension Fuzzer {
 
     func testCurrentUnit() {
         TracePC.resetTestRecordings()
-        
+
         TracePC.recording = true
-        guard test(info.unit) else {
+        let success = test(info.unit)
+        TracePC.recording = false
+
+        guard success else {
             info.world.reportEvent(.testFailure, stats: info.stats)
             var features: [Feature] = []
             TracePC.collectFeatures { features.append($0) }
             try! info.world.saveArtifact(unit: info.unit, features: nil, coverage: nil, complexity: info.unit.complexity(), hash: nil, kind: .testFailure)
             exit(FuzzerTerminationStatus.testFailure.rawValue)
         }
-        
         TracePC.recording = false
 
         info.stats.totalNumberOfRuns += 1
@@ -323,7 +325,6 @@ extension Fuzzer {
         let res = analyze()
         try updateCorpusAfterAnalysis(res)
         info.updateStats()
-        
         guard let event: FuzzerEvent = {
             switch res {
             case .new(_)    : return .updatedCorpus(.new)
@@ -333,7 +334,6 @@ extension Fuzzer {
         }() else {
             return
         }
-        
         info.world.reportEvent(event, stats: info.stats)
     }
     

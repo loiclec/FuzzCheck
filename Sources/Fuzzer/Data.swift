@@ -9,7 +9,6 @@ public enum Feature: Equatable, Hashable {
     case indirect(Indirect)
     case edge(Edge)
     case valueProfile(Cmp)
-    case gep(GEP)
 }
 
 extension Feature {
@@ -20,8 +19,6 @@ extension Feature {
         case .edge(_):
             return 1
         case .valueProfile(_):
-            return 1
-        case .gep(_):
             return 1
         }
     }
@@ -73,19 +70,6 @@ extension Feature {
             self.argxordist = UInt64(scoreFromByte((arg1 &- arg2).nonzeroBitCount))
         }
     }
-    public struct GEP: Equatable, Hashable {
-        let pc: UInt
-        let argcount: UInt8
-        
-        init(pc: UInt, argcount: UInt8) {
-            self.pc = pc
-            self.argcount = argcount
-        }
-        init(pc: UInt, arg: UInt64) {
-            self.pc = pc
-            self.argcount = UInt8(arg.nonzeroBitCount)
-        }
-    }
 }
 
 extension Feature {
@@ -96,8 +80,6 @@ extension Feature {
         case .edge(let x):
             return x.pcguard << 32
         case .valueProfile(let x):
-            return x.pc
-        case .gep(let x):
             return x.pc
         }
     }
@@ -128,24 +110,11 @@ extension Feature.Cmp: Comparable {
     }
 }
 
-extension Feature.GEP: Comparable {
-    public static func < (lhs: Feature.GEP, rhs: Feature.GEP) -> Bool {
-        if lhs.pc < rhs.pc {
-            return true
-        } else if lhs.pc == rhs.pc {
-            return lhs.argcount < rhs.argcount
-        } else {
-            return false
-        }
-    }
-}
-
 extension Feature: Codable {
     enum Kind: String, Codable {
         case indirect
         case edge
         case valueProfile
-        case gep
     }
     
     enum CodingKey: Swift.CodingKey {
@@ -175,10 +144,6 @@ extension Feature: Codable {
             let pc = try container.decode(UInt.self, forKey: .pc)
             let argxordist = try container.decode(UInt64.self, forKey: .arg1) // FIXME
             self = .valueProfile(.init(pc: pc, argxordist: argxordist))
-        case .gep:
-            let pc = try container.decode(UInt.self, forKey: .pc)
-            let argcount = try container.decode(UInt8.self, forKey: .arg1) // FIXME
-            self = .gep(.init(pc: pc, argcount: argcount))
         }
     }
     public func encode(to encoder: Encoder) throws {
@@ -196,10 +161,6 @@ extension Feature: Codable {
             try container.encode(Kind.valueProfile, forKey: .kind)
             try container.encode(x.pc, forKey: .pc)
             try container.encode(x.argxordist, forKey: .arg1) // FIXME
-        case .gep(let x):
-            try container.encode(Kind.gep, forKey: .kind)
-            try container.encode(x.pc, forKey: .pc)
-            try container.encode(x.argcount, forKey: .arg1) // FIXME
         }
     }
 }

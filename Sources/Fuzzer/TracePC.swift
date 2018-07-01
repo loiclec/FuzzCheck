@@ -41,7 +41,7 @@ enum TracePC {
         //  - This condition is respected: no `trace_pc_guard_init` function
         //    will be called after any `trace_pc_guard` function call
         precondition(numGuards > 0)
-        return .allocateAndInitializeTo(0, capacity: numGuards)
+        return .allocateAndInitializeTo(0, capacity: numGuards+1)
     }()
     
     /// The value at index `i` of this buffer holds the number of time that
@@ -53,7 +53,7 @@ enum TracePC {
         //    `handlePCGuardInit` calls are finished
         //  - This condition is respected: no `trace_pc_guard_init` function
         //    will be called after any `trace_pc_guard` function call
-        return .allocateAndInitializeTo(0, capacity: numGuards)
+        return .allocateAndInitializeTo(0, capacity: numGuards+1)
     }()
     
     /// Return the total number of edges that were visited

@@ -256,7 +256,7 @@ extension Fuzzer {
 
             for f in features {
                 let reduced = f.reduced
-                let currentCount = info.corpus.allFeatures[reduced]!.0
+                let currentCount = info.corpus.allFeatures[reduced]!.count
                 info.corpus.allFeatures[reduced] = (currentCount, complexity, index)
             }
             info.corpus.updateScoresAndWeights()

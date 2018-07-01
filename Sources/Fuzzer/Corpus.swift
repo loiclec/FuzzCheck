@@ -41,7 +41,7 @@ extension FuzzerInfo {
         var units: [UnitInfo] = []
         var cumulativeWeights: [Double] = []
         var coverageScore: Double = 0
-        var allFeatures: [Feature.Reduced: (Int, Double, CorpusIndex)] = [:]
+        var allFeatures: [Feature.Reduced: (count: Int, simplest: Double, index: CorpusIndex)] = [:]
         
         var favoredUnit: UnitInfo? = nil
     }
@@ -81,12 +81,12 @@ extension FuzzerInfo.Corpus {
         }
         for f in unitInfo.initiallyReplacingBestUnitForFeatures {
             let reducedF = f.reduced
-            let count = allFeatures[reducedF]!.0
+            let count = allFeatures[reducedF]!.count
             allFeatures[reducedF] = (count + 1, complexity, index)
         }
         for f in unitInfo.otherFeatures {
             let reducedF = f.reduced
-            allFeatures[reducedF]!.0 += 1
+            allFeatures[reducedF]!.count += 1
         }
         
         self.units.append(unitInfo)
@@ -106,7 +106,7 @@ extension FuzzerInfo.Corpus {
             // but it could be many other things, how do I know which one is best?
             units[idx].coverageScore = 0
             for f in (u.initiallyUniqueFeatures + u.initiallyReplacingBestUnitForFeatures) {
-                if allFeatures[f.reduced]?.2 == .normal(idx) {
+                if allFeatures[f.reduced]?.index == .normal(idx) {
                     units[idx].coverageScore += f.score
                     coverageScore += f.score
                 }

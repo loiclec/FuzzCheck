@@ -54,15 +54,13 @@ public struct FuzzerSettings {
     public var maxNumberOfRuns: Int
     public var maxUnitComplexity: Double
     public var mutateDepth: Int
-    public var shuffleAtStartup: Bool
     
-    public init(command: Command = .fuzz, iterationTimeout: UInt = UInt.max, maxNumberOfRuns: Int = Int.max, maxUnitComplexity: Double = 256.0, mutateDepth: Int = 3, shuffleAtStartup: Bool = true) {
+    public init(command: Command = .fuzz, iterationTimeout: UInt = UInt.max, maxNumberOfRuns: Int = Int.max, maxUnitComplexity: Double = 256.0, mutateDepth: Int = 3) {
         self.command = command
         self.iterationTimeout = iterationTimeout
         self.maxNumberOfRuns = maxNumberOfRuns
         self.maxUnitComplexity = maxUnitComplexity
         self.mutateDepth = mutateDepth
-        self.shuffleAtStartup = shuffleAtStartup
     }
 }
 

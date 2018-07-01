@@ -132,13 +132,6 @@ extension CommandLineFuzzerWorldInfo {
             usage: "The number of consecutive mutations applied to a unit in a single iteration",
             completion: nil
         )
-        let shuffleAtStartup = parser.add(
-            option: "--shuffle-input-corpus",
-            shortName: "-shf",
-            kind: Bool.self,
-            usage: "If set, shuffle the input corpus before reading it",
-            completion: nil
-        )
         let globalTimeout = parser.add(
             option: "--global-timeout",
             shortName: "-gtm",
@@ -229,7 +222,6 @@ extension CommandLineFuzzerWorldInfo {
         settingsBinder.bind(option: maxNumberOfRuns) { $0.maxNumberOfRuns = Int($1) }
         settingsBinder.bind(option: maxComplexity) { $0.maxUnitComplexity = $1 }
         settingsBinder.bind(option: mutationDepth) { $0.mutateDepth = Int($1) }
-        settingsBinder.bind(option: shuffleAtStartup) { $0.shuffleAtStartup = $1 }
         settingsBinder.bind(option: iterationTimeout) { $0.iterationTimeout = $1 }
         settingsBinder.bind(option: command) { $0.command = $1 }
         
@@ -273,7 +265,6 @@ extension FuzzerSettings {
         args += ["--iteration-timeout", "\(iterationTimeout)"]
         args += ["--max-number-of-runs", "\(maxNumberOfRuns)"]
         args += ["--mutation-depth", "\(mutateDepth)"]
-        if shuffleAtStartup { args.append("--shuffle-input-corpus") }
         return args
     }
 }

@@ -96,7 +96,7 @@ enum TracePC {
         
         let N = numGuards
         for i in 0 ..< N where eightBitCounters[i] != 0 {
-            let f = Feature.Edge(pcguard: UInt(i), intensity: eightBitCounters[i])
+            let f = Feature.Edge(pcguard: UInt(i), counter: eightBitCounters[i])
             handle(.edge(f))
         }
         

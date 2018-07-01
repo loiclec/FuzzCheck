@@ -9,6 +9,23 @@ public enum Feature: Equatable, Hashable {
     case indirect(Indirect)
     case edge(Edge)
     case valueProfile(Cmp)
+
+    enum Reduced: Equatable, Hashable {
+        case indirect(Indirect.Reduced)
+        case edge(Edge.Reduced)
+        case valueProfile(Cmp.Reduced)
+    }
+    
+    var reduced: Reduced {
+        switch self {
+        case .indirect(let x):
+            return .indirect(x.reduced)
+        case .edge(let x):
+            return .edge(x.reduced)
+        case .valueProfile(let x):
+            return .valueProfile(x.reduced)
+        }
+    }
 }
 
 extension Feature {
@@ -41,6 +58,9 @@ extension Feature {
     public struct Indirect: Equatable, Hashable {
         let caller: UInt
         let callee: UInt
+    
+        typealias Reduced = Indirect
+        var reduced: Reduced { return self }
     }
     public struct Edge: Equatable, Hashable {
         let pcguard: UInt
@@ -49,6 +69,15 @@ extension Feature {
         init(pcguard: UInt, counter: UInt8) {
             self.pcguard = pcguard
             self.counter = counter
+        }
+        
+        struct Reduced: Equatable, Hashable {
+            let pcguard: UInt
+            let intensity: UInt8
+        }
+        
+        var reduced: Reduced {
+            return Reduced(pcguard: pcguard, intensity: UInt8(scoreFromByte(counter)))
         }
     }
     
@@ -62,6 +91,15 @@ extension Feature {
             self.arg1 = arg1
             self.arg2 = arg2
         }
+        
+        struct Reduced: Equatable, Hashable {
+            let pc: UInt
+            let argxordist: UInt8
+        }
+        
+        var reduced: Reduced {
+            return Reduced(pc: pc, argxordist: UInt8(scoreFromByte((arg1 &- arg2).nonzeroBitCount)))
+        }
     }
 }
 
@@ -71,9 +109,9 @@ extension Feature.Indirect: Comparable {
     }
 }
 
-extension Feature.Cmp: Comparable {
-    public static func < (lhs: Feature.Cmp, rhs: Feature.Cmp) -> Bool {
-        return (lhs.pc, lhs.arg1, lhs.arg2) < (rhs.pc, rhs.arg1, rhs.arg2)
+extension Feature.Cmp.Reduced: Comparable {
+    public static func < (lhs: Feature.Cmp.Reduced, rhs: Feature.Cmp.Reduced) -> Bool {
+        return (lhs.pc, lhs.argxordist) < (rhs.pc, rhs.argxordist)
     }
 }
 

@@ -194,7 +194,7 @@ extension Fuzzer {
         var otherFeatures: [Feature] = []
         
         TracePC.collectFeatures { feature in
-            guard let (_, oldComplexity, oldCorpusIndex) = info.corpus.allFeatures[feature] else {
+            guard let (_, oldComplexity, oldCorpusIndex) = info.corpus.allFeatures[feature.reduced] else {
                 uniqueFeatures.append(feature)
                 return
             }
@@ -261,8 +261,9 @@ extension Fuzzer {
             try effect(&info.world)
 
             for f in features {
-                let currentCount = info.corpus.allFeatures[f]!.0
-                info.corpus.allFeatures[f] = (currentCount, complexity, index)
+                let reduced = f.reduced
+                let currentCount = info.corpus.allFeatures[reduced]!.0
+                info.corpus.allFeatures[reduced] = (currentCount, complexity, index)
             }
             info.corpus.updateScoresAndWeights()
             

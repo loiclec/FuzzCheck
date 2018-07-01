@@ -62,10 +62,10 @@ enum TracePC {
     }
     
     /// An array holding the `Feature`s describing indirect function calls.
-    private static var indirectFeatures: [Feature.Indirect] = []
+    private static var indirectFeatures: [(Feature.Indirect, Feature.Indirect.Reduced)] = []
     
     /// An array holding the `Feature`s describing comparisons.
-    private static var cmpFeatures: [Feature.Cmp] = []
+    private static var cmpFeatures: [(Feature.Cmp, Feature.Cmp.Reduced)] = []
     
     /// Handle a call to the sanitizer code coverage function `trace_pc_guard_init`
     /// It assigns a unique value to every pointer inside [start, stop). These values
@@ -85,7 +85,8 @@ enum TracePC {
     /// Handle a call to the sanitizer code coverage function `trace_pc_indir`
     static func handlePCIndir(caller: NormalizedPC, callee: NormalizedPC) {
         let (caller, callee) = (caller.value, callee.value)
-        indirectFeatures.append(.init(caller: caller, callee: callee))
+        let f = Feature.Indirect(caller: caller, callee: callee)
+        indirectFeatures.append((f, f.reduced))
     }
     
     /// Call the given function for every unique collected `Feature`.
@@ -94,30 +95,31 @@ enum TracePC {
     /// in a different order, `collectFeatures` will pass them in the same order.
     static func collectFeatures(_ handle: (Feature) -> Void) {
         
-        let N = numGuards
-        for i in 0 ..< N where eightBitCounters[i] != 0 {
+        for i in eightBitCounters.indices where eightBitCounters[i] != 0 {
             let f = Feature.Edge(pcguard: UInt(i), counter: eightBitCounters[i])
             handle(.edge(f))
         }
         
-        indirectFeatures.sort()
-        cmpFeatures.sort()
+        indirectFeatures.sort { ($0.1 < $1.1) }
+        cmpFeatures.sort { ($0.1 < $1.1) }
 
         // Ensure we don't call `handle` with the same argument twice.
         // This works because the arrays are sorted.
-        var last: Feature? = nil
-        for f in indirectFeatures.lazy.map(Feature.indirect) where last != f {
-            handle(f)
-            last = f
+        var last1: Feature.Indirect.Reduced? = nil
+        for (f, rf) in indirectFeatures where last1 != rf {
+            handle(.indirect(f))
+            last1 = rf
         }
-        for f in cmpFeatures.lazy.map(Feature.valueProfile) where last != f {
-            handle(f)
-            last = f
+        var last2: Feature.Cmp.Reduced? = nil
+        for (f, rf) in cmpFeatures where last2 != rf {
+            handle(.valueProfile(f))
+            last2 = rf
         }
     }
     
     static func handleTraceCmp <T: BinaryInteger & UnsignedInteger> (pc: NormalizedPC, arg1: T, arg2: T) {
-        cmpFeatures.append(.init(pc: pc.value, arg1: numericCast(arg1), arg2: numericCast(arg2)))
+        let f = Feature.Cmp(pc: pc.value, arg1: numericCast(arg1), arg2: numericCast(arg2))
+        cmpFeatures.append((f, f.reduced))
     }
     
     static func resetTestRecordings() {

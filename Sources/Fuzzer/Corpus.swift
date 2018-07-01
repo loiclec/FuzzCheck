@@ -39,9 +39,9 @@ extension FuzzerInfo {
 
         var numActiveUnits = 0
         var units: [UnitInfo] = []
-        var cumulativeWeights: [UInt64] = []
+        var cumulativeWeights: [Double] = []
         var coverageScore: Double = 0
-        var allFeatures: [Feature: (Int, Double, CorpusIndex)] = [:]
+        var allFeatures: [Feature.Reduced: (Int, Double, CorpusIndex)] = [:]
         
         var favoredUnit: UnitInfo? = nil
     }
@@ -75,15 +75,18 @@ extension FuzzerInfo.Corpus {
         let complexity = unitInfo.unit.complexity()
         let index = CorpusIndex.normal(units.endIndex)
         for f in unitInfo.initiallyUniqueFeatures {
-            precondition(allFeatures[f] == nil)
-            allFeatures[f] = (1, complexity, index)
+            let reducedF = f.reduced
+            precondition(allFeatures[reducedF] == nil)
+            allFeatures[reducedF] = (1, complexity, index)
         }
         for f in unitInfo.initiallyReplacingBestUnitForFeatures {
-            let count = allFeatures[f]!.0
-            allFeatures[f] = (count + 1, complexity, index)
+            let reducedF = f.reduced
+            let count = allFeatures[reducedF]!.0
+            allFeatures[reducedF] = (count + 1, complexity, index)
         }
         for f in unitInfo.otherFeatures {
-            allFeatures[f]!.0 += 1
+            let reducedF = f.reduced
+            allFeatures[reducedF]!.0 += 1
         }
         
         self.units.append(unitInfo)
@@ -103,7 +106,7 @@ extension FuzzerInfo.Corpus {
             // but it could be many other things, how do I know which one is best?
             units[idx].coverageScore = 0
             for f in (u.initiallyUniqueFeatures + u.initiallyReplacingBestUnitForFeatures) {
-                if allFeatures[f]?.2 == .normal(idx) {
+                if allFeatures[f.reduced]?.2 == .normal(idx) {
                     units[idx].coverageScore += f.score
                     coverageScore += f.score
                 }
@@ -117,9 +120,9 @@ extension FuzzerInfo.Corpus {
             }
             
         }
-        cumulativeWeights = units.enumerated().scan(0, { (weight, next) in
+        cumulativeWeights = units.enumerated().scan(0.0, { (weight, next) in
             let (_, unit) = next
-            return weight + UInt64(unit.coverageScore)
+            return weight + unit.coverageScore
         })
     }
     

@@ -193,7 +193,6 @@ extension Fuzzer {
         let newUnitInfo = Info.Corpus.UnitInfo(
             unit: info.unit,
             complexity: currentUnitComplexity,
-            coverageScore: -1, // coverage score is unitialized
             features: uniqueFeatures + replacingFeatures + otherFeatures
         )
         return .new(newUnitInfo)
@@ -243,7 +242,6 @@ extension Fuzzer {
         let favoredUnit = Info.Corpus.UnitInfo(
             unit: input,
             complexity: input.complexity(),
-            coverageScore: 1,
             features: []
         )
         info.corpus.favoredUnit = favoredUnit

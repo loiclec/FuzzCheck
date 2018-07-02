@@ -17,8 +17,18 @@ extension FuzzerInfo {
         struct UnitInfo: Codable {
             let unit: T
             let complexity: Double
-            var coverageScore: Double
             let features: [Feature]
+            
+            var coverageScore: Double
+            var flaggedForDeletion: Bool
+        
+            init(unit: T, complexity: Double, features: [Feature]) {
+                self.unit = unit
+                self.complexity = complexity
+                self.features = features
+                self.coverageScore = -1
+                self.flaggedForDeletion = false
+            }
         }
 
         var units: [UnitInfo] = []
@@ -27,8 +37,6 @@ extension FuzzerInfo {
         var smallestUnitComplexityForFeature: [Feature.Reduced: Double] = [:]
         
         var favoredUnit: UnitInfo? = nil
-        
-        let coverageScoreThreshold = 0.5
     }
 }
 
@@ -83,7 +91,7 @@ extension FuzzerInfo.Corpus {
         var sumComplexityRatios: [Feature.Reduced: Double] = [:]
         
         for (u, idx) in zip(units, units.indices) {
-            
+            units[idx].flaggedForDeletion = true
             units[idx].coverageScore = 0
             // the score is:
             // The weighted sum of the scores of this units' features.
@@ -98,10 +106,19 @@ extension FuzzerInfo.Corpus {
             for f in u.features {
                 let simplestComplexity = smallestUnitComplexityForFeature[f.reduced]!
                 let ratio = complexityRatio(simplest: simplestComplexity, other: u.complexity)
+                precondition(ratio <= 1)
+                if ratio == 1 { units[idx].flaggedForDeletion = false }
+            }
+            guard units[idx].flaggedForDeletion == false else {
+                continue
+            }
+            for f in u.features {
+                let simplestComplexity = smallestUnitComplexityForFeature[f.reduced]!
+                let ratio = complexityRatio(simplest: simplestComplexity, other: u.complexity)
                 sumComplexityRatios[f.reduced, default: 0.0] += ratio
             }
         }
-        for (u, idx) in zip(units, units.indices) {
+        for (u, idx) in zip(units, units.indices) where u.flaggedForDeletion == false {
             for f in u.features {
                 let simplestComplexity = smallestUnitComplexityForFeature[f.reduced]!
                 let sumRatios = sumComplexityRatios[f.reduced]!
@@ -113,11 +130,7 @@ extension FuzzerInfo.Corpus {
             }
         }
         let prevCount = units.count
-        units.removeAll { u in
-            // TODO: use both the size of the corpus and the coverageScoreThreshold to determine whether to delete the feature
-            return u.coverageScore <= coverageScoreThreshold
-                && u.features.allSatisfy { smallestUnitComplexityForFeature[$0.reduced]! != u.complexity }
-        }
+        units.removeAll { $0.flaggedForDeletion }
         if prevCount - units.count != 0 {
             print("DELETE \(prevCount - units.count)")
         }

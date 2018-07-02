@@ -15,7 +15,7 @@ extension FuzzerInfo {
     final class Corpus {
         
         struct UnitInfo: Codable {
-            var unit: T
+            let unit: T
             var coverageScore: Double
             let features: [Feature]
         }
@@ -129,23 +129,6 @@ extension FuzzerInfo.Corpus {
             let (_, unit) = next
             return weight + unit.coverageScore
         })
-    }
-    
-    func replace(_ unitIndex: CorpusIndex, with unit: T) -> (inout World) throws -> Void {
-        guard case .normal(let idx) = unitIndex else {
-            fatalError("Cannot delete special corpus unit.")
-        }
-        var oldUnitInfo = units[idx]
-        precondition(unit.complexity() < oldUnitInfo.unit.complexity())
-        
-        let oldUnit = oldUnitInfo.unit
-        oldUnitInfo.unit = unit
-        
-        units[idx] = oldUnitInfo
-        
-        return { w in
-            try w.removeFromOutputCorpus(oldUnit)
-        }
     }
     
     func chooseUnitIdxToMutate(_ r: inout Rand) -> CorpusIndex {

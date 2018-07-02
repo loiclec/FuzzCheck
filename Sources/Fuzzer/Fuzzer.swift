@@ -138,7 +138,6 @@ public enum FuzzerStopReason: CustomStringConvertible {
 
 public enum FuzzerUpdateKind: Equatable, CustomStringConvertible {
     case new
-    case reduce
     case start
     case didReadCorpus
     case done
@@ -147,8 +146,6 @@ public enum FuzzerUpdateKind: Equatable, CustomStringConvertible {
         switch self {
         case .new:
             return "NEW "
-        case .reduce:
-            return "REDUCE"
         case .start:
             return "START"
         case .didReadCorpus:
@@ -162,7 +159,6 @@ public enum FuzzerUpdateKind: Equatable, CustomStringConvertible {
 extension Fuzzer {
     enum AnalysisResult {
         case new(Info.Corpus.UnitInfo)
-        case replace(index: CorpusIndex, features: [Feature], complexity: Double)
         case nothing
     }
 
@@ -245,19 +241,8 @@ extension Fuzzer {
         case .new(let unitInfo):
             let effect = info.corpus.append(unitInfo)
             try effect(&info.world)
-
             info.corpus.updateScoresAndWeights()
-            
-        case .replace(let index, let features, let complexity):
-            let effect = info.corpus.replace(index, with: info.unit)
-            try effect(&info.world)
 
-            for f in features {
-                let reduced = f.reduced
-                info.corpus.smallestUnitComplexityForFeature[reduced] = complexity
-            }
-            info.corpus.updateScoresAndWeights()
-            
         case .nothing:
             return
         }
@@ -316,7 +301,6 @@ extension Fuzzer {
         guard let event: FuzzerEvent = {
             switch res {
             case .new(_)    : return .updatedCorpus(.new)
-            case .replace(_): return .updatedCorpus(.reduce)
             case .nothing   : return nil
             }
         }() else {

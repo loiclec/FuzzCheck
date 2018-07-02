@@ -65,7 +65,7 @@ enum TracePC {
     private static var indirectFeatures: [(Feature.Indirect, Feature.Indirect.Reduced)] = []
     
     /// An array holding the `Feature`s describing comparisons.
-    private static var cmpFeatures: [(Feature.Cmp, Feature.Cmp.Reduced)] = []
+    private static var cmpFeatures: [(Feature.Comparison, Feature.Comparison.Reduced)] = []
     
     /// Handle a call to the sanitizer code coverage function `trace_pc_guard_init`
     /// It assigns a unique value to every pointer inside [start, stop). These values
@@ -110,15 +110,15 @@ enum TracePC {
             handle(.indirect(f))
             last1 = rf
         }
-        var last2: Feature.Cmp.Reduced? = nil
+        var last2: Feature.Comparison.Reduced? = nil
         for (f, rf) in cmpFeatures where last2 != rf {
-            handle(.valueProfile(f))
+            handle(.comparison(f))
             last2 = rf
         }
     }
     
     static func handleTraceCmp <T: BinaryInteger & UnsignedInteger> (pc: NormalizedPC, arg1: T, arg2: T) {
-        let f = Feature.Cmp(pc: pc.value, arg1: numericCast(arg1), arg2: numericCast(arg2))
+        let f = Feature.Comparison(pc: pc.value, arg1: numericCast(arg1), arg2: numericCast(arg2))
         cmpFeatures.append((f, f.reduced))
     }
     

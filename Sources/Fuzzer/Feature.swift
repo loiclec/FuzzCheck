@@ -8,12 +8,12 @@
 public enum Feature: Equatable, Hashable {
     case indirect(Indirect)
     case edge(Edge)
-    case valueProfile(Cmp)
+    case comparison(Comparison)
 
     enum Reduced: Equatable, Hashable {
         case indirect(Indirect.Reduced)
         case edge(Edge.Reduced)
-        case valueProfile(Cmp.Reduced)
+        case comparison(Comparison.Reduced)
     }
     
     var reduced: Reduced {
@@ -22,8 +22,8 @@ public enum Feature: Equatable, Hashable {
             return .indirect(x.reduced)
         case .edge(let x):
             return .edge(x.reduced)
-        case .valueProfile(let x):
-            return .valueProfile(x.reduced)
+        case .comparison(let x):
+            return .comparison(x.reduced)
         }
     }
 }
@@ -35,7 +35,7 @@ extension Feature {
             return 1
         case .edge(_):
             return 1
-        case .valueProfile(_):
+        case .comparison(_):
             return 1
         }
     }
@@ -79,7 +79,7 @@ extension Feature {
         }
     }
     
-    public struct Cmp: Equatable, Hashable {
+    public struct Comparison: Equatable, Hashable {
         let pc: UInt
         let arg1: UInt64
         let arg2: UInt64
@@ -107,8 +107,8 @@ extension Feature.Indirect: Comparable {
     }
 }
 
-extension Feature.Cmp.Reduced: Comparable {
-    public static func < (lhs: Feature.Cmp.Reduced, rhs: Feature.Cmp.Reduced) -> Bool {
+extension Feature.Comparison.Reduced: Comparable {
+    public static func < (lhs: Feature.Comparison.Reduced, rhs: Feature.Comparison.Reduced) -> Bool {
         return (lhs.pc, lhs.argxordist) < (rhs.pc, rhs.argxordist)
     }
 }
@@ -117,7 +117,7 @@ extension Feature: Codable {
     enum Kind: String, Codable {
         case indirect
         case edge
-        case valueProfile
+        case comparison
     }
     
     enum CodingKey: Swift.CodingKey {
@@ -143,11 +143,11 @@ extension Feature: Codable {
             let pcguard = try container.decode(UInt.self, forKey: .pcguard)
             let counter = try container.decode(UInt16.self, forKey: .counter)
             self = .edge(.init(pcguard: pcguard, counter: counter))
-        case .valueProfile:
+        case .comparison:
             let pc = try container.decode(UInt.self, forKey: .pc)
             let arg1 = try container.decode(UInt64.self, forKey: .arg1)
             let arg2 = try container.decode(UInt64.self, forKey: .arg2)
-            self = .valueProfile(.init(pc: pc, arg1: arg1, arg2: arg2))
+            self = .comparison(.init(pc: pc, arg1: arg1, arg2: arg2))
         }
     }
     public func encode(to encoder: Encoder) throws {
@@ -161,8 +161,8 @@ extension Feature: Codable {
             try container.encode(Kind.edge, forKey: .kind)
             try container.encode(x.pcguard, forKey: .pcguard)
             try container.encode(x.counter, forKey: .counter)
-        case .valueProfile(let x):
-            try container.encode(Kind.valueProfile, forKey: .kind)
+        case .comparison(let x):
+            try container.encode(Kind.comparison, forKey: .kind)
             try container.encode(x.pc, forKey: .pc)
             try container.encode(x.arg1, forKey: .arg1)
             try container.encode(x.arg2, forKey: .arg2)

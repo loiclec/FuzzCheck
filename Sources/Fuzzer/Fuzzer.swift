@@ -119,23 +119,6 @@ extension Fuzzer where World == CommandLineFuzzerWorld<UnitGen.Unit> {
     }
 }
 
-enum AnalysisKind: Equatable {
-    case readingCorpus
-    case loopIteration(mutatingUnitIndex: CorpusIndex)
-}
-
-public enum FuzzerStopReason: CustomStringConvertible {
-    case crash
-    case timeout
-    
-    public var description: String {
-        switch self {
-        case .crash: return "crash"
-        case .timeout: return "timeout"
-        }
-    }
-}
-
 public enum FuzzerUpdateKind: Equatable, CustomStringConvertible {
     case new
     case start
@@ -207,27 +190,6 @@ extension Fuzzer {
         guard !(replacingFeatures.isEmpty && uniqueFeatures.isEmpty) else {
             return .nothing
         }
-        /*
-        // because of #HGqvcfCLVhGr I know that replacingFeatures is not empty
-        if
-            uniqueFeatures.isEmpty,
-            case let index = replacingFeatures[0].1,
-            replacingFeatures.allSatisfy({ $0.1 == index })
-        {
-            let oldUnitInfo = info.corpus[index]
-            // still have to check that the old unit does not contain features not included in the current unit
-            // only if they are completely equal can we replace the old unit by the new one
-            // we can compare them in that way because both collections are sorted, see: #mxrvFXBpY9ij
-            
-            // TODO: why do I compare to the initially unique and replacing-best features instead
-            //       of all of them? I *think* because these two types of features represent what
-            //       is interesting about the old unit, and we do not care about its other
-            //       properties, so it is not a loss if we lose them. But is that true?
-            if replacingFeatures.lazy.map({$0.0.reduced}) == oldUnitInfo.features.lazy.map({$0.reduced}) {
-                return .replace(index: index, features: replacingFeatures.map{$0.0}, complexity: currentUnitComplexity)
-            }
-        }
-        */
         let newUnitInfo = Info.Corpus.UnitInfo(
             unit: info.unit,
             coverageScore: -1, // coverage score is unitialized

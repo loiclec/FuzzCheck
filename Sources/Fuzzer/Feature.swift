@@ -42,15 +42,13 @@ extension Feature {
 }
 
 
-func scoreFromByte <T: BinaryInteger> (_ byte: T) -> UInt32 {
-    if byte >= 128 { return 7 }
-    if byte >= 32  { return 6 }
-    if byte >= 16  { return 5 }
-    if byte >= 8   { return 4 }
-    if byte >= 4   { return 3 }
-    if byte >= 3   { return 2 }
-    if byte >= 2   { return 1 }
-    return 0
+func scoreFromCounter <T: BinaryInteger & FixedWidthInteger & UnsignedInteger> (_ counter: T) -> UInt8 {
+    guard counter != T.max else { return UInt8(T.bitWidth) }
+    if counter <= 3 {
+        return UInt8(counter)
+    } else {
+        return UInt8(T.bitWidth - counter.leadingZeroBitCount) + 1
+    }
 }
 
 
@@ -64,9 +62,9 @@ extension Feature {
     }
     public struct Edge: Equatable, Hashable {
         let pcguard: UInt
-        let counter: UInt8
+        let counter: UInt16
         
-        init(pcguard: UInt, counter: UInt8) {
+        init(pcguard: UInt, counter: UInt16) {
             self.pcguard = pcguard
             self.counter = counter
         }
@@ -77,7 +75,7 @@ extension Feature {
         }
         
         var reduced: Reduced {
-            return Reduced(pcguard: pcguard, intensity: UInt8(scoreFromByte(counter)))
+            return Reduced(pcguard: pcguard, intensity: scoreFromCounter(counter))
         }
     }
     
@@ -98,7 +96,7 @@ extension Feature {
         }
         
         var reduced: Reduced {
-            return Reduced(pc: pc, argxordist: UInt8(scoreFromByte((arg1 &- arg2).nonzeroBitCount)))
+            return Reduced(pc: pc, argxordist: scoreFromCounter(UInt8((arg1 &- arg2).nonzeroBitCount)))
         }
     }
 }
@@ -143,7 +141,7 @@ extension Feature: Codable {
             self = .indirect(.init(caller: caller, callee: callee))
         case .edge:
             let pcguard = try container.decode(UInt.self, forKey: .pcguard)
-            let counter = try container.decode(UInt8.self, forKey: .counter)
+            let counter = try container.decode(UInt16.self, forKey: .counter)
             self = .edge(.init(pcguard: pcguard, counter: counter))
         case .valueProfile:
             let pc = try container.decode(UInt.self, forKey: .pc)

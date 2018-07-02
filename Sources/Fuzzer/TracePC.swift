@@ -46,7 +46,7 @@ enum TracePC {
     
     /// The value at index `i` of this buffer holds the number of time that
     /// the code identified by the `pc_guard` of value `i` was visited.
-    static var eightBitCounters: UnsafeMutableBufferPointer<UInt8> = {
+    static var eightBitCounters: UnsafeMutableBufferPointer<UInt16> = {
         precondition(numGuards > 0)
         //  How do we know that `numGuards` has the correct value?
         //  - eightBitCounters should never be used before all the

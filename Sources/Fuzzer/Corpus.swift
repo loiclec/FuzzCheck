@@ -96,11 +96,6 @@ extension FuzzerInfo.Corpus {
             //         f1.score = 22 = uf.f1-score + u2.f1-score
             //         u2.f1-score = uf.c/u2.c * uf.f1-score = 1/10 * 20 = 2
             for f in u.features {
-                // TODO: implement globally-correct method
-                //       maybe I won't need allFeatures.count anymore
-                //       I will probably need to make Feature extra fast to compare/hash
-                //       But first implement the dumb solution
-                
                 let simplestComplexity = smallestUnitComplexityForFeature[f.reduced]!
                 let ratio = complexityRatio(simplest: simplestComplexity, other: u.complexity)
                 sumComplexityRatios[f.reduced, default: 0.0] += ratio

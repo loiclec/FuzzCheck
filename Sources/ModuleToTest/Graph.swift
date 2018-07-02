@@ -234,18 +234,16 @@ extension Graph {
 }
 
 extension Graph {
-    public func crashIfCyclic() {
-        guard graph.count >= 14 else { return }
+    public func isLargeAndCyclic() -> Bool {
+        guard graph.count >= 5 else { return false }
         var set = Set<Int>()
         for i in graph.indices {
             guard graph[i].edges.count == 1, graph[i].edges[0] != i, !set.contains(graph[i].edges[0]) else {
-                return
+                return false
             }
             set.insert(graph[i].edges[0])
         }
-        if self.stronglyConnectedComponents().count == 1 {
-            fatalError()
-        }
+        return self.stronglyConnectedComponents().count == 1
     }
 }
 

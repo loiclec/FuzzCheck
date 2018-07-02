@@ -36,9 +36,9 @@ public final class FuzzerInfo <T, World: FuzzerWorld> where World.Unit == T {
         let now = world.clock()
         let seconds = Double(now - processStartTime) / 1_000_000
         stats.executionsPerSecond = Int((Double(stats.totalNumberOfRuns) / seconds).rounded())
-        stats.corpusSize = corpus.numActiveUnits
+        stats.corpusSize = corpus.units.count
         stats.totalPCCoverage = TracePC.getTotalEdgeCoverage()
-        stats.score = Int(corpus.coverageScore)
+        stats.score = corpus.coverageScore.rounded()
         stats.rss = Int(world.getPeakMemoryUsage())
     }
     
@@ -189,17 +189,17 @@ extension Fuzzer {
         let currentUnitComplexity = info.unit.complexity()
         
         var uniqueFeatures: [Feature] = []
-        var replacingFeatures: [(Feature, CorpusIndex)] = []
+        var replacingFeatures: [Feature] = []
         
         var otherFeatures: [Feature] = []
         
         TracePC.collectFeatures { feature in
-            guard let (_, oldComplexity, oldCorpusIndex) = info.corpus.allFeatures[feature.reduced] else {
+            guard let (_, oldComplexity) = info.corpus.allFeatures[feature.reduced] else {
                 uniqueFeatures.append(feature)
                 return
             }
             if currentUnitComplexity < oldComplexity {
-                replacingFeatures.append((feature, oldCorpusIndex))
+                replacingFeatures.append(feature)
                 return
             } else {
                 otherFeatures.append(feature)
@@ -211,7 +211,7 @@ extension Fuzzer {
         guard !(replacingFeatures.isEmpty && uniqueFeatures.isEmpty) else {
             return .nothing
         }
-        
+        /*
         // because of #HGqvcfCLVhGr I know that replacingFeatures is not empty
         if
             uniqueFeatures.isEmpty,
@@ -227,17 +227,15 @@ extension Fuzzer {
             //       of all of them? I *think* because these two types of features represent what
             //       is interesting about the old unit, and we do not care about its other
             //       properties, so it is not a loss if we lose them. But is that true?
-            if replacingFeatures.lazy.map({$0.0}) == (oldUnitInfo.initiallyUniqueFeatures + oldUnitInfo.initiallyReplacingBestUnitForFeatures) {
+            if replacingFeatures.lazy.map({$0.0.reduced}) == oldUnitInfo.features.lazy.map({$0.reduced}) {
                 return .replace(index: index, features: replacingFeatures.map{$0.0}, complexity: currentUnitComplexity)
             }
         }
-        
+        */
         let newUnitInfo = Info.Corpus.UnitInfo(
             unit: info.unit,
             coverageScore: -1, // coverage score is unitialized
-            initiallyUniqueFeatures: uniqueFeatures,
-            initiallyReplacingBestUnitForFeatures: replacingFeatures.map { $0.0 },
-            otherFeatures: otherFeatures
+            features: uniqueFeatures + replacingFeatures + otherFeatures
         )
         return .new(newUnitInfo)
     }
@@ -257,7 +255,7 @@ extension Fuzzer {
             for f in features {
                 let reduced = f.reduced
                 let currentCount = info.corpus.allFeatures[reduced]!.count
-                info.corpus.allFeatures[reduced] = (currentCount, complexity, index)
+                info.corpus.allFeatures[reduced] = (currentCount, complexity)
             }
             info.corpus.updateScoresAndWeights()
             
@@ -268,9 +266,7 @@ extension Fuzzer {
     
     func processNextUnits() throws {
         let idx = info.corpus.chooseUnitIdxToMutate(&info.world.rand)
-        guard let unit = info.corpus[idx].unit else {
-            fatalError("A previously deleted unit was selected. This should never happen, but any bug in the fuzzer might lead to this situation.")
-        }
+        let unit = info.corpus[idx].unit
         info.unit = unit
         for _ in 0 ..< info.settings.mutateDepth {
             guard info.stats.totalNumberOfRuns < info.settings.maxNumberOfRuns else { break }
@@ -300,9 +296,7 @@ extension Fuzzer {
         let newUnitInfo = Info.Corpus.UnitInfo(
             unit: input,
             coverageScore: 1,
-            initiallyUniqueFeatures: [],
-            initiallyReplacingBestUnitForFeatures: [],
-            otherFeatures: []
+            features: []
         )
         info.corpus.favoredUnit = newUnitInfo
         info.corpus.updateScoresAndWeights()

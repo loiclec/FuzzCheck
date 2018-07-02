@@ -30,20 +30,19 @@ extension FuzzerInfo {
     final class Corpus {
         
         struct UnitInfo: Codable {
-            var unit: T?
+            var unit: T
             var coverageScore: Double
-            let initiallyUniqueFeatures: [Feature]
-            let initiallyReplacingBestUnitForFeatures: [Feature]
-            let otherFeatures: [Feature]
+            let features: [Feature]
         }
 
-        var numActiveUnits = 0
         var units: [UnitInfo] = []
         var cumulativeWeights: [Double] = []
         var coverageScore: Double = 0
-        var allFeatures: [Feature.Reduced: (count: Int, simplest: Double, index: CorpusIndex)] = [:]
+        var allFeatures: [Feature.Reduced: (count: Int, simplest: Double)] = [:]
         
         var favoredUnit: UnitInfo? = nil
+        
+        let coverageScoreThreshold = 0.1
     }
 }
 
@@ -70,29 +69,24 @@ extension FuzzerInfo.Corpus {
 
 extension FuzzerInfo.Corpus {
     func append(_ unitInfo: UnitInfo) -> (inout World) throws -> Void {
-        precondition(unitInfo.unit != nil)
 
-        let complexity = unitInfo.unit.complexity()
-        let index = CorpusIndex.normal(units.endIndex)
-        for f in unitInfo.initiallyUniqueFeatures {
-            let reducedF = f.reduced
-            precondition(allFeatures[reducedF] == nil)
-            allFeatures[reducedF] = (1, complexity, index)
+        for f in unitInfo.features {
+            let reduced = f.reduced
+            
+            if let (count, complexity) = allFeatures[reduced] {
+                if unitInfo.unit.complexity() < complexity {
+                    allFeatures[reduced] = (count + 1, unitInfo.unit.complexity())
+                } else {
+                    allFeatures[reduced]!.count += 1
+                }
+            } else {
+                allFeatures[reduced] = (1, unitInfo.unit.complexity())
+            }
         }
-        for f in unitInfo.initiallyReplacingBestUnitForFeatures {
-            let reducedF = f.reduced
-            let count = allFeatures[reducedF]!.count
-            allFeatures[reducedF] = (count + 1, complexity, index)
-        }
-        for f in unitInfo.otherFeatures {
-            let reducedF = f.reduced
-            allFeatures[reducedF]!.count += 1
-        }
-        
+
         self.units.append(unitInfo)
-        self.numActiveUnits += 1
         return { w in
-            try w.addToOutputCorpus(unitInfo.unit!)
+            try w.addToOutputCorpus(unitInfo.unit)
         }
     }
 }
@@ -102,23 +96,41 @@ extension FuzzerInfo.Corpus {
         coverageScore = 0
         for (u, idx) in zip(units, units.indices) {
             // the score is:
-            // the sum of the score of each feature that this unit is the best one for
-            // but it could be many other things, how do I know which one is best?
+            // The weighted sum of the scores of this units' features.
+            // The weight is given by this set of equations:
+            // 1) for feature f1, the sum of the f1-score of each unit is equal to f1.score
+            // 2) given uf (the minimal unit for f1) and u2, the f1-score of u2 is equal to uf.c/u2.c * uf.f1-score
+            //      that is: more complex units get fewer points per feature
+            //    e.g. given: uf.c=1 ; u2.c=10 ; f1.score = 22
+            //         we find: uf.f1-score = 20 ; u2.f1-score = 2
+            //         f1.score = 22 = uf.f1-score + u2.f1-score
+            //         u2.f1-score = uf.c/u2.c * uf.f1-score = 1/10 * 20 = 2
             units[idx].coverageScore = 0
-            for f in (u.initiallyUniqueFeatures + u.initiallyReplacingBestUnitForFeatures) {
-                if allFeatures[f.reduced]?.index == .normal(idx) {
-                    units[idx].coverageScore += f.score
-                    coverageScore += f.score
-                }
+            for f in u.features {
+                // TODO: implement globally-correct method
+                //       maybe I won't need allFeatures.count anymore
+                //       I will probably need to make Feature extra fast to compare/hash
+                //       But first implement the dumb solution
+                
+                
+                
+                let (count, complexity) = allFeatures[f.reduced]!
+                let splitScore = f.score / Double(count)
+                let complexityWeightedScore = splitScore * (complexity / u.unit.complexity())
+                coverageScore += complexityWeightedScore
+                units[idx].coverageScore += complexityWeightedScore
             }
         }
-        for (u, idx) in zip(units, units.indices) {
-            if u.unit != nil, u.coverageScore == 0 {
-                print("DELETE") // FIXME: push this to World type in an effect return value
-                units[idx].unit = nil
-                numActiveUnits -= 1
-            }
-            
+        let prevCount = units.count
+        units.removeAll { u in
+            // TODO: use both the size of the corpus and the coverageScoreThreshold to determine whether to delete the feature
+            return u.coverageScore <= coverageScoreThreshold
+                && u.features.allSatisfy { allFeatures[$0.reduced]!.count != 1 }
+        }
+        // TODO: update allFeatures.count
+        
+        if prevCount - units.count != 0 {
+            print("DELETE \(prevCount - units.count)")
         }
         cumulativeWeights = units.enumerated().scan(0.0, { (weight, next) in
             let (_, unit) = next
@@ -133,12 +145,10 @@ extension FuzzerInfo.Corpus {
         var oldUnitInfo = units[idx]
         precondition(unit.complexity() < oldUnitInfo.unit.complexity())
         
-        let _oldUnit = oldUnitInfo.unit
+        let oldUnit = oldUnitInfo.unit
         oldUnitInfo.unit = unit
         
         units[idx] = oldUnitInfo
-        
-        guard let oldUnit = _oldUnit else { fatalError("Replacing a unit that doesn't exist") }
         
         return { w in
             try w.removeFromOutputCorpus(oldUnit)
@@ -160,11 +170,8 @@ extension FuzzerInfo.Corpus {
         guard case .normal(let idx) = idx else {
             fatalError("Cannot delete special corpus unit.")
         }
-        guard let oldUnit = units[idx].unit else {
-            fatalError("Deleting a unit that doesn't exist")
-        }
-        units[idx].unit = nil
-        numActiveUnits -= 1
+        let oldUnit = units[idx].unit
+        units.remove(at: idx)
         return { w in
             try w.removeFromOutputCorpus(oldUnit)
         }

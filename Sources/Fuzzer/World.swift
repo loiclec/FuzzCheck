@@ -35,7 +35,7 @@ public protocol FuzzerWorld {
 public struct FuzzerStats {
     public var totalNumberOfRuns: Int = 0
     public var totalPCCoverage: Int = 0
-    public var score: Int = 0
+    public var score: Double = 0
     public var corpusSize: Int = 0
     public var executionsPerSecond: Int = 0
     public var rss: Int = 0

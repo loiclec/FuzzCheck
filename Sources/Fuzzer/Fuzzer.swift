@@ -194,7 +194,7 @@ extension Fuzzer {
         var otherFeatures: [Feature] = []
         
         TracePC.collectFeatures { feature in
-            guard let (_, oldComplexity) = info.corpus.allFeatures[feature.reduced] else {
+            guard let oldComplexity = info.corpus.smallestUnitComplexityForFeature[feature.reduced] else {
                 uniqueFeatures.append(feature)
                 return
             }
@@ -254,8 +254,7 @@ extension Fuzzer {
 
             for f in features {
                 let reduced = f.reduced
-                let currentCount = info.corpus.allFeatures[reduced]!.count
-                info.corpus.allFeatures[reduced] = (currentCount, complexity)
+                info.corpus.smallestUnitComplexityForFeature[reduced] = complexity
             }
             info.corpus.updateScoresAndWeights()
             

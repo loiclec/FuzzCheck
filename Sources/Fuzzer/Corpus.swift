@@ -1,21 +1,6 @@
 
 import Darwin
 
-extension Optional: FuzzUnit where Wrapped: FuzzUnit {
-    public func complexity() -> Double {
-        switch self {
-        case .none: return 0.0
-        case .some(let w): return w.complexity()
-        }
-    }
-    public func hash() -> Int {
-        switch self {
-        case .none: return 0
-        case .some(let w): return w.hash()
-        }
-    }
-}
-
 public func hexString(_ h: Int) -> String {
     let bits = UInt64(bitPattern: Int64(h))
     return String(bits, radix: 16, uppercase: false)
@@ -38,11 +23,11 @@ extension FuzzerInfo {
         var units: [UnitInfo] = []
         var cumulativeWeights: [Double] = []
         var coverageScore: Double = 0
-        var allFeatures: [Feature.Reduced: (count: Int, simplest: Double)] = [:]
+        var smallestUnitComplexityForFeature: [Feature.Reduced: Double] = [:]
         
         var favoredUnit: UnitInfo? = nil
         
-        let coverageScoreThreshold = 0.1
+        let coverageScoreThreshold = 0.5
     }
 }
 
@@ -73,17 +58,11 @@ extension FuzzerInfo.Corpus {
         for f in unitInfo.features {
             let reduced = f.reduced
             
-            if let (count, complexity) = allFeatures[reduced] {
-                if unitInfo.unit.complexity() < complexity {
-                    allFeatures[reduced] = (count + 1, unitInfo.unit.complexity())
-                } else {
-                    allFeatures[reduced]!.count += 1
-                }
-            } else {
-                allFeatures[reduced] = (1, unitInfo.unit.complexity())
+            let complexity = smallestUnitComplexityForFeature[reduced]
+            if complexity == nil || unitInfo.unit.complexity() < complexity! {
+                smallestUnitComplexityForFeature[reduced] = unitInfo.unit.complexity()
             }
         }
-
         self.units.append(unitInfo)
         return { w in
             try w.addToOutputCorpus(unitInfo.unit)
@@ -92,9 +71,19 @@ extension FuzzerInfo.Corpus {
 }
 
 extension FuzzerInfo.Corpus {
+    
+    private func complexityRatio(simplest: Double, other: Double) -> Double {
+        return { $0 * $0 }(simplest / other)
+    }
+    
     func updateScoresAndWeights() {
         coverageScore = 0
+        
+        var sumComplexityRatios: [Feature.Reduced: Double] = [:]
+        
         for (u, idx) in zip(units, units.indices) {
+            
+            units[idx].coverageScore = 0
             // the score is:
             // The weighted sum of the scores of this units' features.
             // The weight is given by this set of equations:
@@ -105,30 +94,34 @@ extension FuzzerInfo.Corpus {
             //         we find: uf.f1-score = 20 ; u2.f1-score = 2
             //         f1.score = 22 = uf.f1-score + u2.f1-score
             //         u2.f1-score = uf.c/u2.c * uf.f1-score = 1/10 * 20 = 2
-            units[idx].coverageScore = 0
             for f in u.features {
                 // TODO: implement globally-correct method
                 //       maybe I won't need allFeatures.count anymore
                 //       I will probably need to make Feature extra fast to compare/hash
                 //       But first implement the dumb solution
                 
-                
-                
-                let (count, complexity) = allFeatures[f.reduced]!
-                let splitScore = f.score / Double(count)
-                let complexityWeightedScore = splitScore * (complexity / u.unit.complexity())
-                coverageScore += complexityWeightedScore
-                units[idx].coverageScore += complexityWeightedScore
+                let simplestComplexity = smallestUnitComplexityForFeature[f.reduced]!
+                let ratio = complexityRatio(simplest: simplestComplexity, other: u.unit.complexity())
+                sumComplexityRatios[f.reduced, default: 0.0] += ratio
+            }
+        }
+        for (u, idx) in zip(units, units.indices) {
+            for f in u.features {
+                let simplestComplexity = smallestUnitComplexityForFeature[f.reduced]!
+                let sumRatios = sumComplexityRatios[f.reduced]!
+                let baseScore = f.score / sumRatios
+                let ratio = complexityRatio(simplest: simplestComplexity, other: u.unit.complexity())
+                let score = baseScore * ratio
+                units[idx].coverageScore += score
+                coverageScore += score
             }
         }
         let prevCount = units.count
         units.removeAll { u in
             // TODO: use both the size of the corpus and the coverageScoreThreshold to determine whether to delete the feature
             return u.coverageScore <= coverageScoreThreshold
-                && u.features.allSatisfy { allFeatures[$0.reduced]!.count != 1 }
+                && u.features.allSatisfy { smallestUnitComplexityForFeature[$0.reduced]! != u.unit.complexity() }
         }
-        // TODO: update allFeatures.count
-        
         if prevCount - units.count != 0 {
             print("DELETE \(prevCount - units.count)")
         }

@@ -167,18 +167,17 @@ extension Fuzzer {
     func analyze() -> AnalysisResult {
         let currentUnitComplexity = info.unit.complexity()
         
-        var uniqueFeatures: [Feature] = []
-        var replacingFeatures: [Feature] = []
+        var bestUnitForFeatures: [Feature] = []
         
         var otherFeatures: [Feature] = []
         
         TracePC.collectFeatures { feature in
             guard let oldComplexity = info.corpus.smallestUnitComplexityForFeature[feature.reduced] else {
-                uniqueFeatures.append(feature)
+                bestUnitForFeatures.append(feature)
                 return
             }
             if currentUnitComplexity < oldComplexity {
-                replacingFeatures.append(feature)
+                bestUnitForFeatures.append(feature)
                 return
             } else {
                 otherFeatures.append(feature)
@@ -187,13 +186,13 @@ extension Fuzzer {
         }
         
         // #HGqvcfCLVhGr
-        guard !(replacingFeatures.isEmpty && uniqueFeatures.isEmpty) else {
+        guard !bestUnitForFeatures.isEmpty else {
             return .nothing
         }
         let newUnitInfo = Info.Corpus.UnitInfo(
             unit: info.unit,
             complexity: currentUnitComplexity,
-            features: uniqueFeatures + replacingFeatures + otherFeatures
+            features: bestUnitForFeatures + otherFeatures
         )
         return .new(newUnitInfo)
     }

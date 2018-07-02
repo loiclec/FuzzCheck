@@ -16,6 +16,7 @@ extension FuzzerInfo {
         
         struct UnitInfo: Codable {
             let unit: T
+            let complexity: Double
             var coverageScore: Double
             let features: [Feature]
         }
@@ -59,8 +60,8 @@ extension FuzzerInfo.Corpus {
             let reduced = f.reduced
             
             let complexity = smallestUnitComplexityForFeature[reduced]
-            if complexity == nil || unitInfo.unit.complexity() < complexity! {
-                smallestUnitComplexityForFeature[reduced] = unitInfo.unit.complexity()
+            if complexity == nil || unitInfo.complexity < complexity! {
+                smallestUnitComplexityForFeature[reduced] = unitInfo.complexity
             }
         }
         self.units.append(unitInfo)
@@ -101,7 +102,7 @@ extension FuzzerInfo.Corpus {
                 //       But first implement the dumb solution
                 
                 let simplestComplexity = smallestUnitComplexityForFeature[f.reduced]!
-                let ratio = complexityRatio(simplest: simplestComplexity, other: u.unit.complexity())
+                let ratio = complexityRatio(simplest: simplestComplexity, other: u.complexity)
                 sumComplexityRatios[f.reduced, default: 0.0] += ratio
             }
         }
@@ -110,7 +111,7 @@ extension FuzzerInfo.Corpus {
                 let simplestComplexity = smallestUnitComplexityForFeature[f.reduced]!
                 let sumRatios = sumComplexityRatios[f.reduced]!
                 let baseScore = f.score / sumRatios
-                let ratio = complexityRatio(simplest: simplestComplexity, other: u.unit.complexity())
+                let ratio = complexityRatio(simplest: simplestComplexity, other: u.complexity)
                 let score = baseScore * ratio
                 units[idx].coverageScore += score
                 coverageScore += score
@@ -120,7 +121,7 @@ extension FuzzerInfo.Corpus {
         units.removeAll { u in
             // TODO: use both the size of the corpus and the coverageScoreThreshold to determine whether to delete the feature
             return u.coverageScore <= coverageScoreThreshold
-                && u.features.allSatisfy { smallestUnitComplexityForFeature[$0.reduced]! != u.unit.complexity() }
+                && u.features.allSatisfy { smallestUnitComplexityForFeature[$0.reduced]! != u.complexity }
         }
         if prevCount - units.count != 0 {
             print("DELETE \(prevCount - units.count)")

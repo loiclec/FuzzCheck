@@ -22,7 +22,7 @@ public protocol FuzzerWorld {
     mutating func readInputCorpus() throws -> [Unit]
     mutating func readInputFile() throws -> Unit
     
-    mutating func saveArtifact(unit: Unit, features: [Feature]?, coverage: Double?, complexity: Double?, hash: Int?, kind: ArtifactKind) throws
+    mutating func saveArtifact(unit: Unit, features: [Feature]?, coverage: Double?, hash: Int?, kind: ArtifactKind) throws
     mutating func addToOutputCorpus(_ unit: Unit) throws
     mutating func removeFromOutputCorpus(_ unit: Unit) throws
     mutating func reportEvent(_ event: FuzzerEvent, stats: FuzzerStats)
@@ -99,11 +99,11 @@ public struct CommandLineFuzzerWorld <Unit: FuzzUnit> : FuzzerWorld {
         return UInt(r.ru_maxrss) >> 20
     }
     
-    public func saveArtifact(unit: Unit, features: [Feature]?, coverage: Double?, complexity: Double?, hash: Int?, kind: ArtifactKind) throws {
+    public func saveArtifact(unit: Unit, features: [Feature]?, coverage: Double?, hash: Int?, kind: ArtifactKind) throws {
         guard let artifactsFolder = info.artifactsFolder else {
             return
         }
-        let content = Artifact.Content.init(schema: info.artifactsContentSchema, unit: unit, features: features, coverage: coverage, hash: hash, complexity: complexity, kind: kind)
+        let content = Artifact.Content.init(schema: info.artifactsContentSchema, unit: unit, features: features, coverage: coverage, hash: hash, complexity: unit.complexity(), kind: kind)
         let encoder = JSONEncoder()
         encoder.outputFormatting = .prettyPrinted
         let data = try encoder.encode(content)

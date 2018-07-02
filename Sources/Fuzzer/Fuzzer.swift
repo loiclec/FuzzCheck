@@ -49,7 +49,7 @@ public final class FuzzerInfo <T, World: FuzzerWorld> where World.Unit == T {
             TracePC.crashed = true
             var features: [Feature] = []
             TracePC.collectFeatures { features.append($0) }
-            try! world.saveArtifact(unit: unit, features: nil, coverage: nil, complexity: unit.complexity(), hash: nil, kind: .crash)
+            try! world.saveArtifact(unit: unit, features: nil, coverage: nil, hash: nil, kind: .crash)
             exit(FuzzerTerminationStatus.crash.rawValue)
             
         case .interrupt:
@@ -156,7 +156,7 @@ extension Fuzzer {
             info.world.reportEvent(.testFailure, stats: info.stats)
             var features: [Feature] = []
             TracePC.collectFeatures { features.append($0) }
-            try! info.world.saveArtifact(unit: info.unit, features: nil, coverage: nil, complexity: info.unit.complexity(), hash: nil, kind: .testFailure)
+            try! info.world.saveArtifact(unit: info.unit, features: nil, coverage: nil, hash: nil, kind: .testFailure)
             exit(FuzzerTerminationStatus.testFailure.rawValue)
         }
         TracePC.recording = false
@@ -192,6 +192,7 @@ extension Fuzzer {
         }
         let newUnitInfo = Info.Corpus.UnitInfo(
             unit: info.unit,
+            complexity: currentUnitComplexity,
             coverageScore: -1, // coverage score is unitialized
             features: uniqueFeatures + replacingFeatures + otherFeatures
         )
@@ -239,14 +240,15 @@ extension Fuzzer {
         info.processStartTime = info.world.clock()
         info.world.reportEvent(.updatedCorpus(.start), stats: info.stats)
         let input = try info.world.readInputFile()
-        let newUnitInfo = Info.Corpus.UnitInfo(
+        let favoredUnit = Info.Corpus.UnitInfo(
             unit: input,
+            complexity: input.complexity(),
             coverageScore: 1,
             features: []
         )
-        info.corpus.favoredUnit = newUnitInfo
+        info.corpus.favoredUnit = favoredUnit
         info.corpus.updateScoresAndWeights()
-        info.settings.maxUnitComplexity = input.complexity().nextDown
+        info.settings.maxUnitComplexity = favoredUnit.complexity.nextDown
         info.world.reportEvent(.updatedCorpus(.didReadCorpus), stats: info.stats)
         while info.stats.totalNumberOfRuns < info.settings.maxNumberOfRuns {
             try processNextUnits()

@@ -115,7 +115,11 @@ func run(process: Ref<Process>, launchPath: String, arguments: [String], env: [S
     process.launchPath = launchPath
     process.environment = env
     process.arguments = arguments
-    try process.run()
+    if #available(OSX 10.13, *) {
+        try process.run()
+    } else {
+        process.launch()
+    }
     process.waitUntilExit()
 }
 
@@ -173,7 +177,11 @@ func signalHandlers(process: Ref<Process>, globalTimeout: UInt?) -> (SignalsHand
                 exit(0)
             }
         }
-        timerSource.activate()
+        if #available(OSX 10.12, *) {
+            timerSource.activate()
+        } else {
+            timerSource.resume()
+        }
     }
     
     return (sh, timerSource)

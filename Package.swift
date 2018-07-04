@@ -2,13 +2,10 @@
 import PackageDescription
 
 let package = Package(
-    name: "swiftpm-fuzzed",
+    name: "FuzzCheck",
     products: [
-        .library(name: "ModuleToTest", targets: ["ModuleToTest"]),
-        .library(name: "Fuzzer", targets: ["Fuzzer"]),
-        .executable(name: "ToTest", targets: ["ToTest"]),
-        .executable(name: "ReadGraph", targets: ["ReadGraph"]), 
-        .executable(name: "FuzzerJobsManager", targets: ["FuzzerJobsManager"]),
+        .library(name: "FuzzCheck", targets: ["Fuzzer", "DefaultFuzzUnitGenerators"]),
+        .executable(name: "FuzzCheckTool", targets: ["FuzzerJobsManager"]),
     ],
     dependencies: [
         .package(path: "swiftpm"),
@@ -18,14 +15,8 @@ let package = Package(
         .target(name: "CBuiltinsNotAvailableInSwift", dependencies: []),
         .target(name: "Fuzzer", dependencies: ["Files", "Utility", "CBuiltinsNotAvailableInSwift"]),
         .target(name: "FuzzerJobsManager", dependencies: ["Files", "Fuzzer", "Utility"]),
-        .target(name: "ModuleToTest", dependencies: []),
-        .target(name: "ModuleToTestMutators", dependencies: ["Fuzzer", "ModuleToTest", "DefaultFuzzUnitGenerators"]),
-        .target(name: "ToTest", dependencies: ["Fuzzer", "DefaultFuzzUnitGenerators", "ModuleToTest", "ModuleToTestMutators", "Utility"]),
-        .target(name: "ReadGraph", dependencies: ["ModuleToTest", "ModuleToTestMutators"]),
         .target(name: "DefaultFuzzUnitGenerators", dependencies: ["Fuzzer"]),
         .testTarget(name: "FuzzerTests", dependencies: ["Fuzzer"]),
-        .testTarget(name: "GraphGeneratorTests", dependencies: ["Fuzzer", "ModuleToTest", "ModuleToTestMutators"])
-    ],
-    fuzzedTargets: ["ToTest", "ModuleToTest"]
+    ]
 )
 

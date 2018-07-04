@@ -6,7 +6,7 @@
 import Basic
 import Files
 import Foundation
-import Fuzzer
+import FuzzCheck
 
 func parseArguments() throws -> (FuzzerManagerSettings, FuzzerSettings, CommandLineFuzzerWorldInfo) {
     

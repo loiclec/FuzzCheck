@@ -1,6 +1,4 @@
 
-import Fuzzer
-
 public struct IntegerMutators <T: FixedWidthInteger & RandomInitializable & FuzzUnit> : Mutators {
     public typealias Mutated = T
     

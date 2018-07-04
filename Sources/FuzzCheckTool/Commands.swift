@@ -6,7 +6,7 @@
 import Basic
 import Files
 import Foundation
-import Fuzzer
+import FuzzCheck
 import Utility
 
 /// A wrapper type with reference semantics

@@ -2,7 +2,7 @@
 import Basic
 import Files
 import Foundation
-import Fuzzer
+import FuzzCheck
 import Utility
 
 typealias Process = Foundation.Process

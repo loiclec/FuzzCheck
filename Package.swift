@@ -4,8 +4,8 @@ import PackageDescription
 let package = Package(
     name: "FuzzCheck",
     products: [
-        .library(name: "FuzzCheck", targets: ["Fuzzer", "DefaultFuzzUnitGenerators"]),
-        .executable(name: "FuzzCheckTool", targets: ["FuzzerJobsManager"]),
+        .library(name: "FuzzCheck", targets: ["FuzzCheck"]),
+        .executable(name: "FuzzCheckTool", targets: ["FuzzCheckTool"]),
     ],
     dependencies: [
         .package(path: "swiftpm"),
@@ -13,10 +13,9 @@ let package = Package(
     ],
     targets: [
         .target(name: "CBuiltinsNotAvailableInSwift", dependencies: []),
-        .target(name: "Fuzzer", dependencies: ["Files", "Utility", "CBuiltinsNotAvailableInSwift"]),
-        .target(name: "FuzzerJobsManager", dependencies: ["Files", "Fuzzer", "Utility"]),
-        .target(name: "DefaultFuzzUnitGenerators", dependencies: ["Fuzzer"]),
-        .testTarget(name: "FuzzerTests", dependencies: ["Fuzzer"]),
+        .target(name: "FuzzCheck", dependencies: ["Files", "Utility", "CBuiltinsNotAvailableInSwift"]),
+        .target(name: "FuzzCheckTool", dependencies: ["Files", "FuzzCheck", "Utility"]),
+        .testTarget(name: "FuzzerTests", dependencies: ["FuzzCheck"]),
     ]
 )
 

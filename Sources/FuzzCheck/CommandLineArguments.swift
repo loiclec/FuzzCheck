@@ -40,6 +40,7 @@ extension Double: ArgumentKind {
         return ShellCompletion.none
     }
 }
+
 extension UInt: ArgumentKind {
     public init(argument: String) throws {
         if let d = UInt(argument) {
@@ -52,6 +53,7 @@ extension UInt: ArgumentKind {
         return ShellCompletion.none
     }
 }
+ 
 extension Folder: ArgumentKind {
     public convenience init(argument: String) throws {
         try self.init(path: argument)

@@ -49,7 +49,7 @@ public final class FuzzerInfo <T, World: FuzzerWorld> where World.Unit == T {
             TracePC.crashed = true
             var features: [Feature] = []
             TracePC.collectFeatures { features.append($0) }
-            try! world.saveArtifact(unit: unit, features: nil, coverage: nil, hash: nil, kind: .crash)
+            try! world.saveArtifact(unit: unit, features: features, coverage: corpus.coverageScore, hash: unit.hash(), kind: .crash)
             exit(FuzzerTerminationStatus.crash.rawValue)
             
         case .interrupt:
@@ -156,7 +156,7 @@ extension Fuzzer {
             info.world.reportEvent(.testFailure, stats: info.stats)
             var features: [Feature] = []
             TracePC.collectFeatures { features.append($0) }
-            try! info.world.saveArtifact(unit: info.unit, features: nil, coverage: nil, hash: nil, kind: .testFailure)
+            try! info.world.saveArtifact(unit: info.unit, features: features, coverage: info.corpus.coverageScore, hash: info.unit.hash(), kind: .testFailure)
             exit(FuzzerTerminationStatus.testFailure.rawValue)
         }
         TracePC.recording = false

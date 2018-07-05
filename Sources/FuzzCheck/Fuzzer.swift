@@ -11,6 +11,13 @@ public enum FuzzerTerminationStatus: Int32 {
     case unknown = 3
 }
 
+/**
+ The state of the fuzzer:
+ - in-memory pool of units
+ - statistics
+ - state of the external world
+ - etc.
+ */
 public final class FuzzerState <Unit, Properties, World>
     where
     World: FuzzerWorld,
@@ -18,13 +25,22 @@ public final class FuzzerState <Unit, Properties, World>
     Properties: FuzzUnitProperties,
     Properties.Unit == Unit
 {
+    /// A collection of previously-tested units that are considered interesting
     let pool: UnitPool = UnitPool()
+    /// The current unit that is being tested
     var unit: Unit
-
+    /// Various statistics about the current fuzzer run.
     var stats: FuzzerStats
+    /// The initial settings passed to the fuzzer
     var settings: FuzzerSettings
-    
+    /// The time at which the fuzzer started. Used for computing the average execution speed.
     var processStartTime: UInt = 0
+    /**
+     A property managing the effects and coeffects produced and needed by the fuzzer.
+    
+     It provides a source of randomness, performs file operations, gives the current
+     time, the memory consumption, etc.
+     */
     var world: World
 
     init(unit: Unit, settings: FuzzerSettings, world: World) {
@@ -34,16 +50,18 @@ public final class FuzzerState <Unit, Properties, World>
         self.world = world
     }
 
+    /// Gather statistics about the state of the fuzzer and store them in `self.stats`.
     func updateStats() {
         let now = world.clock()
         let seconds = Double(now - processStartTime) / 1_000_000
         stats.executionsPerSecond = Int((Double(stats.totalNumberOfRuns) / seconds).rounded())
         stats.poolSize = pool.units.count
-        stats.totalPCCoverage = TracePC.getTotalEdgeCoverage()
+        stats.totalEdgeCoverage = TracePC.getTotalEdgeCoverage()
         stats.score = pool.coverageScore.rounded()
         stats.rss = Int(world.getPeakMemoryUsage())
     }
     
+    /// Handle the signal sent to the process and exit.
     func receive(signal: Signal) -> Never {
         world.reportEvent(.caughtSignal(signal), stats: stats)
         switch signal {
@@ -63,8 +81,19 @@ public final class FuzzerState <Unit, Properties, World>
     }
 }
 
+/// A fuzzer meant to be used from the command line
 public typealias CommandLineFuzzer <FuzzUnit: FuzzUnit> = Fuzzer<FuzzUnit.Unit, FuzzUnit, FuzzUnit, CommandLineFuzzerWorld<FuzzUnit.Unit, FuzzUnit>> where FuzzUnit.Unit: Codable
 
+/**
+ A fuzzer can fuzz-test a function `test: (Unit) -> Bool`. It finds values of
+ `Unit` for which `test` returns `false` or crashes.
+ 
+ It is configurable by three generic type parameters:
+ - `Generator` defines how to generate and evolve values of type `Unit`
+ - `Properties` defines how to compute essential properties of `Unit` (such as their complexities or hash value)
+ - `World` regulates the communication between the Fuzzer and the real-world,
+   such as the file system, time, or random number generator.
+ */
 public final class Fuzzer <Unit, Generator, Properties, World>
     where
     Generator: FuzzUnitGenerator,
@@ -103,6 +132,9 @@ public final class Fuzzer <Unit, Generator, Properties, World>
 
 extension Fuzzer where Unit: Codable, Properties == Generator, World == CommandLineFuzzerWorld<Generator.Unit, Generator> {
     
+    
+    /// Execute the fuzzer command given by `Commandline.arguments` for the given test function and generator.
+    /// It might never return.
     public static func launch(test: @escaping (Unit) -> Bool, generator: Generator) throws {
         
         let (parser, settingsBinder, worldBinder, _) = CommandLineFuzzerWorldInfo.argumentsParser()
@@ -130,32 +162,7 @@ extension Fuzzer where Unit: Codable, Properties == Generator, World == CommandL
     }
 }
 
-public enum FuzzerUpdateKind: Equatable, CustomStringConvertible {
-    case new
-    case start
-    case didReadCorpus
-    case done
-    
-    public var description: String {
-        switch self {
-        case .new:
-            return "NEW "
-        case .start:
-            return "START"
-        case .didReadCorpus:
-            return "DID READ CORPUS"
-        case .done:
-            return "DONE"
-        }
-    }
-}
-
 extension Fuzzer {
-    enum AnalysisResult {
-        case new(State.UnitPool.UnitInfo)
-        case nothing
-    }
-
     func testCurrentUnit() {
         TracePC.resetTestRecordings()
 
@@ -170,16 +177,14 @@ extension Fuzzer {
             try! state.world.saveArtifact(unit: state.unit, features: features, coverage: state.pool.coverageScore, kind: .testFailure)
             exit(FuzzerTerminationStatus.testFailure.rawValue)
         }
-        TracePC.recording = false
 
         state.stats.totalNumberOfRuns += 1
     }
 
-    func analyze() -> AnalysisResult {
+    func analyze() -> State.UnitPool.UnitInfo? {
         let currentUnitComplexity = Properties.complexity(of: state.unit)
         
         var bestUnitForFeatures: [Feature] = []
-        
         var otherFeatures: [Feature] = []
         
         TracePC.collectFeatures { feature in
@@ -196,28 +201,15 @@ extension Fuzzer {
             }
         }
         
-        // #HGqvcfCLVhGr
         guard !bestUnitForFeatures.isEmpty else {
-            return .nothing
+            return nil
         }
         let newUnitInfo = State.UnitPool.UnitInfo(
             unit: state.unit,
             complexity: currentUnitComplexity,
             features: bestUnitForFeatures + otherFeatures
         )
-        return .new(newUnitInfo)
-    }
-    
-    func updateCorpusAfterAnalysis(_ result: AnalysisResult) throws {
-        switch result {
-        case .new(let unitInfo):
-            let effect = state.pool.append(unitInfo)
-            try effect(&state.world)
-            state.pool.updateScoresAndWeights()
-
-        case .nothing:
-            return
-        }
+        return newUnitInfo
     }
     
     func processNextUnits() throws {
@@ -234,20 +226,20 @@ extension Fuzzer {
 
     public func loop() throws {
         state.processStartTime = state.world.clock()
-        state.world.reportEvent(.updatedCorpus(.start), stats: state.stats)
+        state.world.reportEvent(.start, stats: state.stats)
         
         try processInitialUnits()
-        state.world.reportEvent(.updatedCorpus(.didReadCorpus), stats: state.stats)
+        state.world.reportEvent(.didReadCorpus, stats: state.stats)
             
         while state.stats.totalNumberOfRuns < state.settings.maxNumberOfRuns {
             try processNextUnits()
         }
-        state.world.reportEvent(.updatedCorpus(.done), stats: state.stats)
+        state.world.reportEvent(.done, stats: state.stats)
     }
     
     public func minimizeLoop() throws {
         state.processStartTime = state.world.clock()
-        state.world.reportEvent(.updatedCorpus(.start), stats: state.stats)
+        state.world.reportEvent(.start, stats: state.stats)
         let input = try state.world.readInputFile()
         let favoredUnit = State.UnitPool.UnitInfo(
             unit: input,
@@ -257,28 +249,25 @@ extension Fuzzer {
         state.pool.favoredUnit = favoredUnit
         state.pool.updateScoresAndWeights()
         state.settings.maxUnitComplexity = favoredUnit.complexity.nextDown
-        state.world.reportEvent(.updatedCorpus(.didReadCorpus), stats: state.stats)
+        state.world.reportEvent(.didReadCorpus, stats: state.stats)
         while state.stats.totalNumberOfRuns < state.settings.maxNumberOfRuns {
             try processNextUnits()
         }
-        state.world.reportEvent(.updatedCorpus(.done), stats: state.stats)
+        state.world.reportEvent(.done, stats: state.stats)
     }
     
     func processCurrentUnit() throws {
         testCurrentUnit()
         
-        let res = analyze()
-        try updateCorpusAfterAnalysis(res)
+        let result = analyze()
         state.updateStats()
-        guard let event: FuzzerEvent = {
-            switch res {
-            case .new(_)    : return .updatedCorpus(.new)
-            case .nothing   : return nil
-            }
-        }() else {
+        guard let newUnitInfo = result else {
             return
         }
-        state.world.reportEvent(event, stats: state.stats)
+        let effect = state.pool.append(newUnitInfo)
+        try effect(&state.world)
+        state.pool.updateScoresAndWeights()
+        state.world.reportEvent(.new, stats: state.stats)
     }
     
     func processInitialUnits() throws {

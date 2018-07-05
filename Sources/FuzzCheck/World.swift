@@ -8,9 +8,19 @@
 import Files
 import Foundation
 
+/// An fuzzer event to communicate with the world
 public enum FuzzerEvent {
-    case updatedCorpus(FuzzerUpdateKind)
+    /// The fuzzing process started
+    case start
+    /// The fuzzing process ended
+    case done
+    /// A new interesting unit was discovered
+    case new
+    /// The initial corpus has been process
+    case didReadCorpus
+    /// A signal sent to the process was caught
     case caughtSignal(Signal)
+    /// A test failure was found
     case testFailure
 }
 
@@ -36,7 +46,7 @@ public protocol FuzzerWorld {
 
 public struct FuzzerStats {
     public var totalNumberOfRuns: Int = 0
-    public var totalPCCoverage: Int = 0
+    public var totalEdgeCoverage: Int = 0
     public var score: Double = 0
     public var poolSize: Int = 0
     public var executionsPerSecond: Int = 0
@@ -117,7 +127,7 @@ public struct CommandLineFuzzerWorld <Unit, Properties> : FuzzerWorld
         let data = try encoder.encode(content)
         let nameInfo = ArtifactNameInfo(hash: hash, complexity: complexity, kind: kind)
         let name = ArtifactNameWithoutIndex(schema: info.artifactsNameSchema, info: nameInfo).fillGapToBeUnique(from: readArtifactsFolderNames())
-        print("Saving crash at \(artifactsFolder.path)\(name)")
+        print("Saving \(kind) at \(artifactsFolder.path)\(name)")
         try artifactsFolder.createFileIfNeeded(withName: name, contents: data)
     }
     
@@ -179,8 +189,14 @@ public struct CommandLineFuzzerWorld <Unit, Properties> : FuzzerWorld
     
     public func reportEvent(_ event: FuzzerEvent, stats: FuzzerStats) {
         switch event {
-        case .updatedCorpus(let updateKind):
-            print(updateKind, terminator: "\t")
+        case .start:
+            print("START\t")
+        case .done:
+            print("DONE\t")
+        case .new:
+            print("NEW\t")
+        case .didReadCorpus:
+            print("FINISHED READING CORPUS\t")
         case .caughtSignal(let signal):
             switch signal {
             case .illegalInstruction, .abort, .busError, .floatingPointException:
@@ -194,7 +210,7 @@ public struct CommandLineFuzzerWorld <Unit, Properties> : FuzzerWorld
             print("\n================ TEST FAILED ================")
         }
         print("\(stats.totalNumberOfRuns)", terminator: "\t")
-        print("cov: \(stats.totalPCCoverage)", terminator: "\t")
+        print("cov: \(stats.totalEdgeCoverage)", terminator: "\t")
         print("score: \(stats.score)", terminator: "\t")
         print("corp: \(stats.poolSize)", terminator: "\t")
         print("exec/s: \(stats.executionsPerSecond)", terminator: "\t")

@@ -9,11 +9,7 @@ public enum FuzzerTerminationStatus: Int32 {
     case testFailure = 2
     case unknown = 3
 }
-/*
- For some reason having the fuzzer be generic over FuzzTest and containing the SignalsHandler was a problem.
- So I created another type that only depends on the FuzzUnit type and gather as much data as I can here, leaving
- the fuzzer with only FuzzTest-related properties and methods.
- */
+
 public final class FuzzerInfo <Unit, Properties, World>
     where
     World: FuzzerWorld,
@@ -67,7 +63,7 @@ public final class FuzzerInfo <Unit, Properties, World>
     }
 }
 
-public typealias CommandLineFuzzer <Generator: FuzzUnitGenerator & FuzzUnitProperties> = Fuzzer<Generator.Unit, Generator, Generator, CommandLineFuzzerWorld<Generator.Unit, Generator>> where Generator.Unit: Codable
+public typealias CommandLineFuzzer <FuzzUnit: FuzzUnit> = Fuzzer<FuzzUnit.Unit, FuzzUnit, FuzzUnit, CommandLineFuzzerWorld<FuzzUnit.Unit, FuzzUnit>> where FuzzUnit.Unit: Codable
 
 public final class Fuzzer <Unit, Generator, Properties, World>
     where

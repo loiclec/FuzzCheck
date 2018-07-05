@@ -3,6 +3,7 @@ import Basic
 import Darwin
 import Foundation
 
+/// The reason why the fuzzer terminated, to be passed as argument to `exit(..)`
 public enum FuzzerTerminationStatus: Int32 {
     case success = 0
     case crash = 1
@@ -10,7 +11,7 @@ public enum FuzzerTerminationStatus: Int32 {
     case unknown = 3
 }
 
-public final class FuzzerInfo <Unit, Properties, World>
+public final class FuzzerState <Unit, Properties, World>
     where
     World: FuzzerWorld,
     World.Unit == Unit,
@@ -75,9 +76,9 @@ public final class Fuzzer <Unit, Generator, Properties, World>
     World.Unit == Unit
 {
     
-    typealias Info = FuzzerInfo<Unit, Properties, World>
+    typealias State = FuzzerState<Unit, Properties, World>
     
-    let info: Info
+    let state: State
     let generator: Generator
     let test: (Unit) -> Bool
     let signalsHandler: SignalsHandler
@@ -85,12 +86,12 @@ public final class Fuzzer <Unit, Generator, Properties, World>
     public init(test: @escaping (Unit) -> Bool, generator: Generator, settings: FuzzerSettings, world: World) {
         self.generator = generator
         self.test = test
-        self.info = Info(unit: generator.baseUnit, settings: settings, world: world)
+        self.state = State(unit: generator.baseUnit, settings: settings, world: world)
     
         let signals: [Signal] = [.segmentationViolation, .busError, .abort, .illegalInstruction, .floatingPointException, .interrupt, .softwareTermination, .fileSizeLimitExceeded]
         
-        self.signalsHandler = SignalsHandler(signals: signals) { [info] signal in
-            info.receive(signal: signal)
+        self.signalsHandler = SignalsHandler(signals: signals) { [state] signal in
+            state.receive(signal: signal)
         }
         
         precondition(Foundation.Thread.isMainThread, "Fuzzer can only be initialized on the main thread")
@@ -114,13 +115,13 @@ extension Fuzzer where Unit: Codable, Properties == Generator, World == CommandL
             try worldBinder.fill(parseResult: res, into: &world)
 
             let fuzzer = Fuzzer(test: test, generator: generator, settings: settings, world: CommandLineFuzzerWorld(info: world))
-            switch fuzzer.info.settings.command {
+            switch fuzzer.state.settings.command {
             case .fuzz:
                 try fuzzer.loop()
             case .minimize:
                 try fuzzer.minimizeLoop()
             case .read:
-                fuzzer.info.unit = try fuzzer.info.world.readInputFile()
+                fuzzer.state.unit = try fuzzer.state.world.readInputFile()
                 fuzzer.testCurrentUnit()
             }
         } catch let e {
@@ -152,7 +153,7 @@ public enum FuzzerUpdateKind: Equatable, CustomStringConvertible {
 
 extension Fuzzer {
     enum AnalysisResult {
-        case new(Info.Corpus.UnitInfo)
+        case new(State.Corpus.UnitInfo)
         case nothing
     }
 
@@ -160,30 +161,30 @@ extension Fuzzer {
         TracePC.resetTestRecordings()
 
         TracePC.recording = true
-        let success = test(info.unit)
+        let success = test(state.unit)
         TracePC.recording = false
 
         guard success else {
-            info.world.reportEvent(.testFailure, stats: info.stats)
+            state.world.reportEvent(.testFailure, stats: state.stats)
             var features: [Feature] = []
             TracePC.collectFeatures { features.append($0) }
-            try! info.world.saveArtifact(unit: info.unit, features: features, coverage: info.corpus.coverageScore, kind: .testFailure)
+            try! state.world.saveArtifact(unit: state.unit, features: features, coverage: state.corpus.coverageScore, kind: .testFailure)
             exit(FuzzerTerminationStatus.testFailure.rawValue)
         }
         TracePC.recording = false
 
-        info.stats.totalNumberOfRuns += 1
+        state.stats.totalNumberOfRuns += 1
     }
 
     func analyze() -> AnalysisResult {
-        let currentUnitComplexity = Properties.complexity(of: info.unit)
+        let currentUnitComplexity = Properties.complexity(of: state.unit)
         
         var bestUnitForFeatures: [Feature] = []
         
         var otherFeatures: [Feature] = []
         
         TracePC.collectFeatures { feature in
-            guard let oldComplexity = info.corpus.smallestUnitComplexityForFeature[feature.reduced] else {
+            guard let oldComplexity = state.corpus.smallestUnitComplexityForFeature[feature.reduced] else {
                 bestUnitForFeatures.append(feature)
                 return
             }
@@ -200,8 +201,8 @@ extension Fuzzer {
         guard !bestUnitForFeatures.isEmpty else {
             return .nothing
         }
-        let newUnitInfo = Info.Corpus.UnitInfo(
-            unit: info.unit,
+        let newUnitInfo = State.Corpus.UnitInfo(
+            unit: state.unit,
             complexity: currentUnitComplexity,
             features: bestUnitForFeatures + otherFeatures
         )
@@ -211,9 +212,9 @@ extension Fuzzer {
     func updateCorpusAfterAnalysis(_ result: AnalysisResult) throws {
         switch result {
         case .new(let unitInfo):
-            let effect = info.corpus.append(unitInfo)
-            try effect(&info.world)
-            info.corpus.updateScoresAndWeights()
+            let effect = state.corpus.append(unitInfo)
+            try effect(&state.world)
+            state.corpus.updateScoresAndWeights()
 
         case .nothing:
             return
@@ -221,47 +222,47 @@ extension Fuzzer {
     }
     
     func processNextUnits() throws {
-        let idx = info.corpus.chooseUnitIdxToMutate(&info.world.rand)
-        let unit = info.corpus[idx].unit
-        info.unit = unit
-        for _ in 0 ..< info.settings.mutateDepth {
-            guard info.stats.totalNumberOfRuns < info.settings.maxNumberOfRuns else { break }
-            guard generator.mutate(&info.unit, &info.world.rand) else { break  }
-            guard Properties.complexity(of: info.unit) < info.settings.maxUnitComplexity else { continue }
+        let idx = state.corpus.chooseUnitIdxToMutate(&state.world.rand)
+        let unit = state.corpus[idx].unit
+        state.unit = unit
+        for _ in 0 ..< state.settings.mutateDepth {
+            guard state.stats.totalNumberOfRuns < state.settings.maxNumberOfRuns else { break }
+            guard generator.mutate(&state.unit, &state.world.rand) else { break  }
+            guard Properties.complexity(of: state.unit) < state.settings.maxUnitComplexity else { continue }
             try processCurrentUnit()
         }
     }
 
     public func loop() throws {
-        info.processStartTime = info.world.clock()
-        info.world.reportEvent(.updatedCorpus(.start), stats: info.stats)
+        state.processStartTime = state.world.clock()
+        state.world.reportEvent(.updatedCorpus(.start), stats: state.stats)
         
         try processInitialUnits()
-        info.world.reportEvent(.updatedCorpus(.didReadCorpus), stats: info.stats)
+        state.world.reportEvent(.updatedCorpus(.didReadCorpus), stats: state.stats)
             
-        while info.stats.totalNumberOfRuns < info.settings.maxNumberOfRuns {
+        while state.stats.totalNumberOfRuns < state.settings.maxNumberOfRuns {
             try processNextUnits()
         }
-        info.world.reportEvent(.updatedCorpus(.done), stats: info.stats)
+        state.world.reportEvent(.updatedCorpus(.done), stats: state.stats)
     }
     
     public func minimizeLoop() throws {
-        info.processStartTime = info.world.clock()
-        info.world.reportEvent(.updatedCorpus(.start), stats: info.stats)
-        let input = try info.world.readInputFile()
-        let favoredUnit = Info.Corpus.UnitInfo(
+        state.processStartTime = state.world.clock()
+        state.world.reportEvent(.updatedCorpus(.start), stats: state.stats)
+        let input = try state.world.readInputFile()
+        let favoredUnit = State.Corpus.UnitInfo(
             unit: input,
             complexity: Properties.complexity(of: input),
             features: []
         )
-        info.corpus.favoredUnit = favoredUnit
-        info.corpus.updateScoresAndWeights()
-        info.settings.maxUnitComplexity = favoredUnit.complexity.nextDown
-        info.world.reportEvent(.updatedCorpus(.didReadCorpus), stats: info.stats)
-        while info.stats.totalNumberOfRuns < info.settings.maxNumberOfRuns {
+        state.corpus.favoredUnit = favoredUnit
+        state.corpus.updateScoresAndWeights()
+        state.settings.maxUnitComplexity = favoredUnit.complexity.nextDown
+        state.world.reportEvent(.updatedCorpus(.didReadCorpus), stats: state.stats)
+        while state.stats.totalNumberOfRuns < state.settings.maxNumberOfRuns {
             try processNextUnits()
         }
-        info.world.reportEvent(.updatedCorpus(.done), stats: info.stats)
+        state.world.reportEvent(.updatedCorpus(.done), stats: state.stats)
     }
     
     func processCurrentUnit() throws {
@@ -269,7 +270,7 @@ extension Fuzzer {
         
         let res = analyze()
         try updateCorpusAfterAnalysis(res)
-        info.updateStats()
+        state.updateStats()
         guard let event: FuzzerEvent = {
             switch res {
             case .new(_)    : return .updatedCorpus(.new)
@@ -278,19 +279,19 @@ extension Fuzzer {
         }() else {
             return
         }
-        info.world.reportEvent(event, stats: info.stats)
+        state.world.reportEvent(event, stats: state.stats)
     }
     
     func processInitialUnits() throws {
-        var units = try info.world.readInputCorpus()
+        var units = try state.world.readInputCorpus()
         if units.isEmpty {
-            units += generator.initialUnits(&info.world.rand)
+            units += generator.initialUnits(&state.world.rand)
         }
         // Filter the units that are too complex
-        units = units.filter { Properties.complexity(of: $0) <= info.settings.maxUnitComplexity }
+        units = units.filter { Properties.complexity(of: $0) <= state.settings.maxUnitComplexity }
         
         for u in units {
-            info.unit = u
+            state.unit = u
             try processCurrentUnit()
         }
     }

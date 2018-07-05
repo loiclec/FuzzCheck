@@ -11,7 +11,7 @@ enum CorpusIndex: Hashable {
     case favored
 }
 
-extension FuzzerInfo {
+extension FuzzerState {
     final class Corpus {
         
         struct UnitInfo {
@@ -40,7 +40,7 @@ extension FuzzerInfo {
     }
 }
 
-extension FuzzerInfo.Corpus {
+extension FuzzerState.Corpus {
     subscript(idx: CorpusIndex) -> UnitInfo {
         get {
             switch idx {
@@ -61,7 +61,7 @@ extension FuzzerInfo.Corpus {
     }
 }
 
-extension FuzzerInfo.Corpus {
+extension FuzzerState.Corpus {
     func append(_ unitInfo: UnitInfo) -> (inout World) throws -> Void {
 
         for f in unitInfo.features {
@@ -79,7 +79,7 @@ extension FuzzerInfo.Corpus {
     }
 }
 
-extension FuzzerInfo.Corpus {
+extension FuzzerState.Corpus {
     
     private func complexityRatio(simplest: Double, other: Double) -> Double {
         return { $0 * $0 }(simplest / other)

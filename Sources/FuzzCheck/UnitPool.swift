@@ -12,7 +12,7 @@ enum CorpusIndex: Hashable {
 }
 
 extension FuzzerState {
-    final class Corpus {
+    final class UnitPool {
         
         struct UnitInfo {
             let unit: Unit
@@ -40,7 +40,7 @@ extension FuzzerState {
     }
 }
 
-extension FuzzerState.Corpus {
+extension FuzzerState.UnitPool {
     subscript(idx: CorpusIndex) -> UnitInfo {
         get {
             switch idx {
@@ -61,7 +61,7 @@ extension FuzzerState.Corpus {
     }
 }
 
-extension FuzzerState.Corpus {
+extension FuzzerState.UnitPool {
     func append(_ unitInfo: UnitInfo) -> (inout World) throws -> Void {
 
         for f in unitInfo.features {
@@ -79,7 +79,7 @@ extension FuzzerState.Corpus {
     }
 }
 
-extension FuzzerState.Corpus {
+extension FuzzerState.UnitPool {
     
     private func complexityRatio(simplest: Double, other: Double) -> Double {
         return { $0 * $0 }(simplest / other)
@@ -153,7 +153,7 @@ extension FuzzerState.Corpus {
 
     func deleteUnit(_ idx: CorpusIndex) -> (inout World) throws -> Void {
         guard case .normal(let idx) = idx else {
-            fatalError("Cannot delete special corpus unit.")
+            fatalError("Cannot delete special pool unit.")
         }
         let oldUnit = units[idx].unit
         units.remove(at: idx)

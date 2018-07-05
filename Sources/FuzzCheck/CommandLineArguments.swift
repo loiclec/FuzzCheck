@@ -17,14 +17,14 @@ Steps:
 - read sample inputs from a list of input folders
 - feed these inputs to a test Swift function
 - analyze the code coverage triggered by each input
-- the most interesting inputs are kept in an in-memory corpus
+- the most interesting inputs are kept in an in-memory pool of units
 - then, repeatedly:
-    - randomly select an input from the in-memory corpus
+    - randomly select an input from the in-memory pool
     - apply random mutations to that input
     - feed the mutated input to the test function
     - analyze the code coverage again
     - evaluate the usefulness of the mutated input
-      and maybe add it to the in-memory corpus
+      and maybe add it to the in-memory pool
     - repeat until a crash is found
 """
 

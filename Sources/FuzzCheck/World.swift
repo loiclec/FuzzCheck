@@ -38,7 +38,7 @@ public struct FuzzerStats {
     public var totalNumberOfRuns: Int = 0
     public var totalPCCoverage: Int = 0
     public var score: Double = 0
-    public var corpusSize: Int = 0
+    public var poolSize: Int = 0
     public var executionsPerSecond: Int = 0
     public var rss: Int = 0
 }
@@ -196,7 +196,7 @@ public struct CommandLineFuzzerWorld <Unit, Properties> : FuzzerWorld
         print("\(stats.totalNumberOfRuns)", terminator: "\t")
         print("cov: \(stats.totalPCCoverage)", terminator: "\t")
         print("score: \(stats.score)", terminator: "\t")
-        print("corp: \(stats.corpusSize)", terminator: "\t")
+        print("corp: \(stats.poolSize)", terminator: "\t")
         print("exec/s: \(stats.executionsPerSecond)", terminator: "\t")
         print("rss: \(stats.rss)")
     }

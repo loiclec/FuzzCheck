@@ -18,8 +18,7 @@ public final class FuzzerState <Unit, Properties, World>
     Properties: FuzzUnitProperties,
     Properties.Unit == Unit
 {
-    
-    let corpus: Corpus = Corpus()
+    let pool: UnitPool = UnitPool()
     var unit: Unit
 
     var stats: FuzzerStats
@@ -39,9 +38,9 @@ public final class FuzzerState <Unit, Properties, World>
         let now = world.clock()
         let seconds = Double(now - processStartTime) / 1_000_000
         stats.executionsPerSecond = Int((Double(stats.totalNumberOfRuns) / seconds).rounded())
-        stats.corpusSize = corpus.units.count
+        stats.poolSize = pool.units.count
         stats.totalPCCoverage = TracePC.getTotalEdgeCoverage()
-        stats.score = corpus.coverageScore.rounded()
+        stats.score = pool.coverageScore.rounded()
         stats.rss = Int(world.getPeakMemoryUsage())
     }
     
@@ -52,7 +51,7 @@ public final class FuzzerState <Unit, Properties, World>
             TracePC.crashed = true
             var features: [Feature] = []
             TracePC.collectFeatures { features.append($0) }
-            try! world.saveArtifact(unit: unit, features: features, coverage: corpus.coverageScore, kind: .crash)
+            try! world.saveArtifact(unit: unit, features: features, coverage: pool.coverageScore, kind: .crash)
             exit(FuzzerTerminationStatus.crash.rawValue)
             
         case .interrupt:
@@ -153,7 +152,7 @@ public enum FuzzerUpdateKind: Equatable, CustomStringConvertible {
 
 extension Fuzzer {
     enum AnalysisResult {
-        case new(State.Corpus.UnitInfo)
+        case new(State.UnitPool.UnitInfo)
         case nothing
     }
 
@@ -168,7 +167,7 @@ extension Fuzzer {
             state.world.reportEvent(.testFailure, stats: state.stats)
             var features: [Feature] = []
             TracePC.collectFeatures { features.append($0) }
-            try! state.world.saveArtifact(unit: state.unit, features: features, coverage: state.corpus.coverageScore, kind: .testFailure)
+            try! state.world.saveArtifact(unit: state.unit, features: features, coverage: state.pool.coverageScore, kind: .testFailure)
             exit(FuzzerTerminationStatus.testFailure.rawValue)
         }
         TracePC.recording = false
@@ -184,7 +183,7 @@ extension Fuzzer {
         var otherFeatures: [Feature] = []
         
         TracePC.collectFeatures { feature in
-            guard let oldComplexity = state.corpus.smallestUnitComplexityForFeature[feature.reduced] else {
+            guard let oldComplexity = state.pool.smallestUnitComplexityForFeature[feature.reduced] else {
                 bestUnitForFeatures.append(feature)
                 return
             }
@@ -201,7 +200,7 @@ extension Fuzzer {
         guard !bestUnitForFeatures.isEmpty else {
             return .nothing
         }
-        let newUnitInfo = State.Corpus.UnitInfo(
+        let newUnitInfo = State.UnitPool.UnitInfo(
             unit: state.unit,
             complexity: currentUnitComplexity,
             features: bestUnitForFeatures + otherFeatures
@@ -212,9 +211,9 @@ extension Fuzzer {
     func updateCorpusAfterAnalysis(_ result: AnalysisResult) throws {
         switch result {
         case .new(let unitInfo):
-            let effect = state.corpus.append(unitInfo)
+            let effect = state.pool.append(unitInfo)
             try effect(&state.world)
-            state.corpus.updateScoresAndWeights()
+            state.pool.updateScoresAndWeights()
 
         case .nothing:
             return
@@ -222,8 +221,8 @@ extension Fuzzer {
     }
     
     func processNextUnits() throws {
-        let idx = state.corpus.chooseUnitIdxToMutate(&state.world.rand)
-        let unit = state.corpus[idx].unit
+        let idx = state.pool.chooseUnitIdxToMutate(&state.world.rand)
+        let unit = state.pool[idx].unit
         state.unit = unit
         for _ in 0 ..< state.settings.mutateDepth {
             guard state.stats.totalNumberOfRuns < state.settings.maxNumberOfRuns else { break }
@@ -250,13 +249,13 @@ extension Fuzzer {
         state.processStartTime = state.world.clock()
         state.world.reportEvent(.updatedCorpus(.start), stats: state.stats)
         let input = try state.world.readInputFile()
-        let favoredUnit = State.Corpus.UnitInfo(
+        let favoredUnit = State.UnitPool.UnitInfo(
             unit: input,
             complexity: Properties.complexity(of: input),
             features: []
         )
-        state.corpus.favoredUnit = favoredUnit
-        state.corpus.updateScoresAndWeights()
+        state.pool.favoredUnit = favoredUnit
+        state.pool.updateScoresAndWeights()
         state.settings.maxUnitComplexity = favoredUnit.complexity.nextDown
         state.world.reportEvent(.updatedCorpus(.didReadCorpus), stats: state.stats)
         while state.stats.totalNumberOfRuns < state.settings.maxNumberOfRuns {

@@ -1,5 +1,5 @@
 
-public struct IntegerMutators <T: FixedWidthInteger & RandomInitializable & FuzzUnit> : Mutators {
+public struct IntegerMutators <T: FixedWidthInteger & RandomInitializable> : FuzzUnitMutators {
     public typealias Mutated = T
     
     public enum Mutator {
@@ -56,16 +56,28 @@ extension FuzzUnitGenerator {
         return (0 ..< 10).map { i in
             var x = baseUnit
             for _ in 0 ..< (i * 10) {
-                _ = mutators.mutate(&x, &r)
+                _ = mutate(&x, &r)
             }
             return x
         }
     }
 }
 
-struct IntegerGenerator <T: FixedWidthInteger & RandomInitializable & FuzzUnit> : FuzzUnitGenerator {
+struct IntegerFuzzing <T: FixedWidthInteger & RandomInitializable> : FuzzUnitGenerator, FuzzUnitProperties {
+    
     let mutators = IntegerMutators<T>()
     let baseUnit = 0 as T
+    
+    func mutate(_ x: inout T, _ r: inout Rand) -> Bool {
+        return mutators.mutate(&x, &r)
+    }
+
+    static func hash(of unit: T) -> Int {
+        return unit.hashValue
+    }
+    static func complexity(of: T) -> Double {
+        return Double(T.bitWidth) / 8
+    }
 }
 
 extension FixedWidthInteger where Self: UnsignedInteger {
@@ -77,21 +89,7 @@ extension FixedWidthInteger where Self: UnsignedInteger {
     }
 }
 
-extension Array: FuzzUnit where Element: FuzzUnit {
-    public func complexity() -> Double {
-        return Double(1 + count)
-    }
-    
-    public func hash() -> Int {
-        var hasher = Hasher()
-        for x in self {
-            hasher.combine(x.hash())
-        }
-        return hasher.finalize()
-    }
-}
-
-public struct ArrayMutators <M: Mutators> : Mutators {
+public struct ArrayMutators <M: FuzzUnitMutators> : FuzzUnitMutators {
     public typealias Mutated = Array<M.Mutated>
     
     public let initializeElement: (inout Rand) -> M.Mutated

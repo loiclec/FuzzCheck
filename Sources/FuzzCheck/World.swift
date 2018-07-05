@@ -15,14 +15,16 @@ public enum FuzzerEvent {
 }
 
 public protocol FuzzerWorld {
-    associatedtype Unit: FuzzUnit
+    associatedtype Unit
+    associatedtype Properties: FuzzUnitProperties where Properties.Unit == Unit
+    
     
     mutating func getPeakMemoryUsage() -> UInt
     mutating func clock() -> UInt
     mutating func readInputCorpus() throws -> [Unit]
     mutating func readInputFile() throws -> Unit
     
-    mutating func saveArtifact(unit: Unit, features: [Feature]?, coverage: Double?, hash: Int?, kind: ArtifactKind) throws
+    mutating func saveArtifact(unit: Unit, features: [Feature]?, coverage: Double?, kind: ArtifactKind) throws
     mutating func addToOutputCorpus(_ unit: Unit) throws
     mutating func removeFromOutputCorpus(_ unit: Unit) throws
     mutating func reportEvent(_ event: FuzzerEvent, stats: FuzzerStats)
@@ -76,8 +78,12 @@ public struct CommandLineFuzzerWorldInfo {
     public init() {}
 }
 
-public struct CommandLineFuzzerWorld <Unit: FuzzUnit> : FuzzerWorld {
-
+public struct CommandLineFuzzerWorld <Unit, Properties> : FuzzerWorld
+    where
+    Unit: Codable,
+    Properties: FuzzUnitProperties,
+    Properties.Unit == Unit
+{
     public var info: CommandLineFuzzerWorldInfo
     public var rand: Rand {
         get { return info.rand }
@@ -99,15 +105,17 @@ public struct CommandLineFuzzerWorld <Unit: FuzzUnit> : FuzzerWorld {
         return UInt(r.ru_maxrss) >> 20
     }
     
-    public func saveArtifact(unit: Unit, features: [Feature]?, coverage: Double?, hash: Int?, kind: ArtifactKind) throws {
+    public func saveArtifact(unit: Unit, features: [Feature]?, coverage: Double?, kind: ArtifactKind) throws {
         guard let artifactsFolder = info.artifactsFolder else {
             return
         }
-        let content = Artifact.Content.init(schema: info.artifactsContentSchema, unit: unit, features: features, coverage: coverage, hash: hash, complexity: unit.complexity(), kind: kind)
+        let complexity = Properties.complexity(of: unit)
+        let hash = Properties.hash(of: unit)
+        let content = Artifact.Content.init(schema: info.artifactsContentSchema, unit: unit, features: features, coverage: coverage, hash: hash, complexity: complexity, kind: kind)
         let encoder = JSONEncoder()
         encoder.outputFormatting = .prettyPrinted
         let data = try encoder.encode(content)
-        let nameInfo = ArtifactNameInfo(hash: unit.hash(), complexity: unit.complexity(), kind: kind)
+        let nameInfo = ArtifactNameInfo(hash: hash, complexity: complexity, kind: kind)
         let name = ArtifactNameWithoutIndex(schema: info.artifactsNameSchema, info: nameInfo).fillGapToBeUnique(from: readArtifactsFolderNames())
         print("Saving crash at \(artifactsFolder.path)\(name)")
         try artifactsFolder.createFileIfNeeded(withName: name, contents: data)
@@ -155,7 +163,7 @@ public struct CommandLineFuzzerWorld <Unit: FuzzUnit> : FuzzerWorld {
     
     public func removeFromOutputCorpus(_ unit: Unit) throws {
         guard let outputCorpus = info.outputCorpus else { return }
-        try outputCorpus.file(named: hexString(unit.hash())).delete()
+        try outputCorpus.file(named: hexString(Properties.hash(of: unit))).delete()
     }
     
     public mutating func addToOutputCorpus(_ unit: Unit) throws {
@@ -163,7 +171,7 @@ public struct CommandLineFuzzerWorld <Unit: FuzzUnit> : FuzzerWorld {
         let encoder = JSONEncoder()
         encoder.outputFormatting = .prettyPrinted
         let data = try encoder.encode(unit)
-        let nameInfo = ArtifactNameInfo(hash: unit.hash(), complexity: unit.complexity(), kind: .unit)
+        let nameInfo = ArtifactNameInfo(hash: Properties.hash(of: unit), complexity: Properties.complexity(of: unit), kind: .unit)
         let name = ArtifactNameWithoutIndex(schema: info.artifactsNameSchema, info: nameInfo).fillGapToBeUnique(from: [])
         info.outputCorpusNames.insert(name)
         try outputCorpus.createFileIfNeeded(withName: name, contents: data)

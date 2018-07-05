@@ -14,15 +14,15 @@ enum CorpusIndex: Hashable {
 extension FuzzerInfo {
     final class Corpus {
         
-        struct UnitInfo: Codable {
-            let unit: T
+        struct UnitInfo {
+            let unit: Unit
             let complexity: Double
             let features: [Feature]
             
             var coverageScore: Double
             var flaggedForDeletion: Bool
         
-            init(unit: T, complexity: Double, features: [Feature]) {
+            init(unit: Unit, complexity: Double, features: [Feature]) {
                 self.unit = unit
                 self.complexity = complexity
                 self.features = features

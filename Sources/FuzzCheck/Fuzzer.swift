@@ -14,10 +14,16 @@ public enum FuzzerTerminationStatus: Int32 {
  So I created another type that only depends on the FuzzUnit type and gather as much data as I can here, leaving
  the fuzzer with only FuzzTest-related properties and methods.
  */
-public final class FuzzerInfo <T, World: FuzzerWorld> where World.Unit == T {
+public final class FuzzerInfo <Unit, Properties, World>
+    where
+    World: FuzzerWorld,
+    World.Unit == Unit,
+    Properties: FuzzUnitProperties,
+    Properties.Unit == Unit
+{
     
     let corpus: Corpus = Corpus()
-    var unit: T
+    var unit: Unit
 
     var stats: FuzzerStats
     var settings: FuzzerSettings
@@ -25,7 +31,7 @@ public final class FuzzerInfo <T, World: FuzzerWorld> where World.Unit == T {
     var processStartTime: UInt = 0
     var world: World
 
-    init(unit: T, settings: FuzzerSettings, world: World) {
+    init(unit: Unit, settings: FuzzerSettings, world: World) {
         self.unit = unit
         self.stats = FuzzerStats()
         self.settings = settings
@@ -49,7 +55,7 @@ public final class FuzzerInfo <T, World: FuzzerWorld> where World.Unit == T {
             TracePC.crashed = true
             var features: [Feature] = []
             TracePC.collectFeatures { features.append($0) }
-            try! world.saveArtifact(unit: unit, features: features, coverage: corpus.coverageScore, hash: unit.hash(), kind: .crash)
+            try! world.saveArtifact(unit: unit, features: features, coverage: corpus.coverageScore, kind: .crash)
             exit(FuzzerTerminationStatus.crash.rawValue)
             
         case .interrupt:
@@ -61,18 +67,26 @@ public final class FuzzerInfo <T, World: FuzzerWorld> where World.Unit == T {
     }
 }
 
-public typealias CommandLineFuzzer <UnitGen: FuzzUnitGenerator> = Fuzzer<UnitGen, CommandLineFuzzerWorld<UnitGen.Unit>>
+public typealias CommandLineFuzzer <Generator: FuzzUnitGenerator & FuzzUnitProperties> = Fuzzer<Generator.Unit, Generator, Generator, CommandLineFuzzerWorld<Generator.Unit, Generator>> where Generator.Unit: Codable
 
-public final class Fuzzer <UnitGen: FuzzUnitGenerator, World: FuzzerWorld> where World.Unit == UnitGen.Unit {
+public final class Fuzzer <Unit, Generator, Properties, World>
+    where
+    Generator: FuzzUnitGenerator,
+    Properties: FuzzUnitProperties,
+    World: FuzzerWorld,
+    Generator.Unit == Unit,
+    Properties.Unit == Unit,
+    World.Unit == Unit
+{
     
-    typealias Info = FuzzerInfo<UnitGen.Unit, World>
+    typealias Info = FuzzerInfo<Unit, Properties, World>
     
     let info: Info
-    let generator: UnitGen
-    let test: (UnitGen.Unit) -> Bool
+    let generator: Generator
+    let test: (Unit) -> Bool
     let signalsHandler: SignalsHandler
     
-    public init(test: @escaping (UnitGen.Unit) -> Bool, generator: UnitGen, settings: FuzzerSettings, world: World) {
+    public init(test: @escaping (Unit) -> Bool, generator: Generator, settings: FuzzerSettings, world: World) {
         self.generator = generator
         self.test = test
         self.info = Info(unit: generator.baseUnit, settings: settings, world: world)
@@ -91,8 +105,9 @@ public final class Fuzzer <UnitGen: FuzzUnitGenerator, World: FuzzerWorld> where
     }
 }
 
-extension Fuzzer where World == CommandLineFuzzerWorld<UnitGen.Unit> {
-    public static func launch(test: @escaping (UnitGen.Unit) -> Bool, generator: UnitGen) throws {
+extension Fuzzer where Unit: Codable, Properties == Generator, World == CommandLineFuzzerWorld<Generator.Unit, Generator> {
+    
+    public static func launch(test: @escaping (Unit) -> Bool, generator: Generator) throws {
         
         let (parser, settingsBinder, worldBinder, _) = CommandLineFuzzerWorldInfo.argumentsParser()
         do {
@@ -156,7 +171,7 @@ extension Fuzzer {
             info.world.reportEvent(.testFailure, stats: info.stats)
             var features: [Feature] = []
             TracePC.collectFeatures { features.append($0) }
-            try! info.world.saveArtifact(unit: info.unit, features: features, coverage: info.corpus.coverageScore, hash: info.unit.hash(), kind: .testFailure)
+            try! info.world.saveArtifact(unit: info.unit, features: features, coverage: info.corpus.coverageScore, kind: .testFailure)
             exit(FuzzerTerminationStatus.testFailure.rawValue)
         }
         TracePC.recording = false
@@ -165,7 +180,7 @@ extension Fuzzer {
     }
 
     func analyze() -> AnalysisResult {
-        let currentUnitComplexity = info.unit.complexity()
+        let currentUnitComplexity = Properties.complexity(of: info.unit)
         
         var bestUnitForFeatures: [Feature] = []
         
@@ -215,8 +230,8 @@ extension Fuzzer {
         info.unit = unit
         for _ in 0 ..< info.settings.mutateDepth {
             guard info.stats.totalNumberOfRuns < info.settings.maxNumberOfRuns else { break }
-            guard generator.mutators.mutate(&info.unit, &info.world.rand) else { break  }
-            guard info.unit.complexity() < info.settings.maxUnitComplexity else { continue }
+            guard generator.mutate(&info.unit, &info.world.rand) else { break  }
+            guard Properties.complexity(of: info.unit) < info.settings.maxUnitComplexity else { continue }
             try processCurrentUnit()
         }
     }
@@ -240,7 +255,7 @@ extension Fuzzer {
         let input = try info.world.readInputFile()
         let favoredUnit = Info.Corpus.UnitInfo(
             unit: input,
-            complexity: input.complexity(),
+            complexity: Properties.complexity(of: input),
             features: []
         )
         info.corpus.favoredUnit = favoredUnit
@@ -276,7 +291,7 @@ extension Fuzzer {
             units += generator.initialUnits(&info.world.rand)
         }
         // Filter the units that are too complex
-        units = units.filter { $0.complexity() <= info.settings.maxUnitComplexity }
+        units = units.filter { Properties.complexity(of: $0) <= info.settings.maxUnitComplexity }
         
         for u in units {
             info.unit = u

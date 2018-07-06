@@ -1,6 +1,6 @@
 //
 //  ArgumentsParser.swift
-//  FuzzerJobsManager
+//  FuzzCheckJobsManager
 //
 
 import Basic

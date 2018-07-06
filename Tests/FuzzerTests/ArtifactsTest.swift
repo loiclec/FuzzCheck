@@ -1,6 +1,6 @@
 //
 //  ArtifactsTest.swift
-//  Fuzzer
+//  FuzzCheck
 //
 
 
@@ -23,7 +23,7 @@ class ArtifactsTests: XCTestCase {
         ]
         
         let schemaAtoms = ArtifactSchema.Name.Atom.read(from: s)
-        let schema = ArtifactSchema.Name(atoms: schemaAtoms, ext: ext)
+        let schema = ArtifactSchema.Name(components: schemaAtoms, ext: ext)
         let artNameInfo = ArtifactNameInfo(hash: Int.max, complexity: .init(43.327), kind: .crash)
         let artName = artNameInfo.name(following: schema)
         //print(artName)

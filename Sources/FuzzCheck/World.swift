@@ -1,6 +1,6 @@
 //
 //  World.swift
-//  Fuzzer
+//  FuzzCheck
 //
 //  Created by Loïc Lecrenier on 03/06/2018.
 //

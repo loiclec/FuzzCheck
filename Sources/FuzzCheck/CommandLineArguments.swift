@@ -1,6 +1,6 @@
 //
 //  CommandLineArguments.swift
-//  Fuzzer
+//  FuzzCheck
 //
 //  Created by Loïc Lecrenier on 04/06/2018.
 //
@@ -71,9 +71,9 @@ extension File: ArgumentKind {
     }
 }
 
-extension Array: ArgumentKind where Element == ArtifactSchema.Name.Atom {
+extension Array: ArgumentKind where Element == ArtifactSchema.Name.Component {
     public init(argument: String) throws {
-        self = ArtifactSchema.Name.Atom.read(from: argument)
+        self = ArtifactSchema.Name.Component.read(from: argument)
     }
     public static var completion: ShellCompletion {
         return ShellCompletion.none
@@ -170,7 +170,7 @@ extension CommandLineFuzzerWorldInfo {
         let artifactFileName = parser.add(
             option: "--artifact-filename",
             shortName: "-art-name",
-            kind: Array<ArtifactSchema.Name.Atom>.self,
+            kind: Array<ArtifactSchema.Name.Component>.self,
             usage: "The name of the artifact"
         )
         let artifactFileExtension = parser.add(
@@ -230,7 +230,7 @@ extension CommandLineFuzzerWorldInfo {
         worldBinder.bind(option: inputCorpora) { $0.inputCorpora = $1 }
         worldBinder.bind(option: outputCorpus) { $0.outputCorpus = $1 }
         worldBinder.bind(option: artifactsFolder) { $0.artifactsFolder = $1 }
-        worldBinder.bind(option: artifactFileName) { $0.artifactsNameSchema.atoms = $1 }
+        worldBinder.bind(option: artifactFileName) { $0.artifactsNameSchema.components = $1 }
         worldBinder.bind(option: artifactFileExtension) { $0.artifactsNameSchema.ext = $1 }
         worldBinder.bind(option: seed) { $0.rand = Rand(seed: UInt32($1)) }
         worldBinder.bind(option: inputFile) { $0.inputFile = $1 }
@@ -278,7 +278,7 @@ extension CommandLineFuzzerWorldInfo {
        
         if let artifactsFolder = artifactsFolder {
             args += ["--artifact-folder", "\(artifactsFolder.path)"]
-            args += ["--artifact-filename", "\(artifactsNameSchema.atoms.map { $0.description }.joined())"]
+            args += ["--artifact-filename", "\(artifactsNameSchema.components.map { $0.description }.joined())"]
             if let ext = artifactsNameSchema.ext { args += ["--artifact-file-extension", "\(ext)"] }
             if let out = outputCorpus { args += ["--output-folder", "\(out.path)"] }
             var contentSchema: [String] = []

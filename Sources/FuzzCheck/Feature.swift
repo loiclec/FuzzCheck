@@ -1,6 +1,6 @@
 //
 //  Feature.swift
-//  Fuzzer
+//  FuzzCheck
 //
 //  Created by Loïc Lecrenier on 27/05/2018.
 //

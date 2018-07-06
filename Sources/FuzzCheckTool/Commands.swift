@@ -1,6 +1,6 @@
 //
 //  Commands.swift
-//  FuzzerJobsManager
+//  FuzzCheckJobsManager
 //
 
 import Basic

@@ -90,7 +90,7 @@ public typealias CommandLineFuzzer <FuzzUnit: FuzzUnit> = Fuzzer<FuzzUnit.Unit, 
  
  It is configurable by three generic type parameters:
  - `Generator` defines how to generate and evolve values of type `Unit`
- - `Properties` defines how to compute essential properties of `Unit` (such as their complexities or hash value)
+ - `Properties` defines how to compute essential properties of `Unit` (such as their complexities or hash values)
  - `World` regulates the communication between the Fuzzer and the real-world,
    such as the file system, time, or random number generator.
  */
@@ -134,7 +134,6 @@ extension Fuzzer where Unit: Codable, Properties == Generator, World == CommandL
     
     
     /// Execute the fuzzer command given by `Commandline.arguments` for the given test function and generator.
-    /// It might never return.
     public static func launch(test: @escaping (Unit) -> Bool, generator: Generator) throws {
         
         let (parser, settingsBinder, worldBinder, _) = CommandLineFuzzerWorldInfo.argumentsParser()
@@ -163,6 +162,10 @@ extension Fuzzer where Unit: Codable, Properties == Generator, World == CommandL
 }
 
 extension Fuzzer {
+    /**
+     Run and record the test function for the current test unit.
+     Exit and save the artifact if the test function failed.
+    */
     func testCurrentUnit() {
         TracePC.resetTestRecordings()
 
@@ -181,6 +184,11 @@ extension Fuzzer {
         state.stats.totalNumberOfRuns += 1
     }
 
+    /**
+     Analyze the recording of the last test function call.
+     Return the current unit along with its associated analysis data iff
+     the current unit is interesting and should be added to the unit pool.
+    */
     func analyze() -> State.UnitPool.UnitInfo? {
         let currentUnitComplexity = Properties.complexity(of: state.unit)
         
@@ -211,7 +219,29 @@ extension Fuzzer {
         )
         return newUnitInfo
     }
+
+    /**
+     Run and record the test function for the current test unit,
+     analyze the recording, and update the unit pool if needed.
+     */
+    func processCurrentUnit() throws {
+        testCurrentUnit()
+        
+        let result = analyze()
+        state.updateStats()
+        guard let newUnitInfo = result else {
+            return
+        }
+        let effect = state.pool.append(newUnitInfo)
+        try effect(&state.world)
+        state.pool.updateScoresAndWeights()
+        state.world.reportEvent(.new, stats: state.stats)
+    }
     
+    /**
+     Change the current unit to a selection from the unit pool.
+     Then repeatedly mutate and process the current unit, up to `mutateDepth` times.
+     */
     func processNextUnits() throws {
         let idx = state.pool.chooseUnitIdxToMutate(&state.world.rand)
         let unit = state.pool[idx].unit
@@ -223,7 +253,29 @@ extension Fuzzer {
             try processCurrentUnit()
         }
     }
-
+    
+    /**
+     Process the units in the input corpus, or process the initial units
+     given by the generator if the input corpus is empty.
+    */
+    func processInitialUnits() throws {
+        var units = try state.world.readInputCorpus()
+        if units.isEmpty {
+            units += generator.initialUnits(&state.world.rand)
+        }
+        // Filter the units that are too complex
+        units = units.filter { Properties.complexity(of: $0) <= state.settings.maxUnitComplexity }
+        
+        for u in units {
+            state.unit = u
+            try processCurrentUnit()
+        }
+    }
+    
+    /**
+     Launch the regular fuzzing loop, which processes units, starting from the initial ones,
+     until either a bug is found or the maximum number of iterations have been executed.
+    */
     public func loop() throws {
         state.processStartTime = state.world.clock()
         state.world.reportEvent(.start, stats: state.stats)
@@ -237,6 +289,11 @@ extension Fuzzer {
         state.world.reportEvent(.done, stats: state.stats)
     }
     
+    /**
+     Launch the minimizing loop. It reads the unit to minimize from the input file, then
+     processes simpler variations of that unit until either a bug is found or the maximum
+     number of iterations have been executed.
+    */
     public func minimizeLoop() throws {
         state.processStartTime = state.world.clock()
         state.world.reportEvent(.start, stats: state.stats)
@@ -254,33 +311,5 @@ extension Fuzzer {
             try processNextUnits()
         }
         state.world.reportEvent(.done, stats: state.stats)
-    }
-    
-    func processCurrentUnit() throws {
-        testCurrentUnit()
-        
-        let result = analyze()
-        state.updateStats()
-        guard let newUnitInfo = result else {
-            return
-        }
-        let effect = state.pool.append(newUnitInfo)
-        try effect(&state.world)
-        state.pool.updateScoresAndWeights()
-        state.world.reportEvent(.new, stats: state.stats)
-    }
-    
-    func processInitialUnits() throws {
-        var units = try state.world.readInputCorpus()
-        if units.isEmpty {
-            units += generator.initialUnits(&state.world.rand)
-        }
-        // Filter the units that are too complex
-        units = units.filter { Properties.complexity(of: $0) <= state.settings.maxUnitComplexity }
-        
-        for u in units {
-            state.unit = u
-            try processCurrentUnit()
-        }
     }
 }

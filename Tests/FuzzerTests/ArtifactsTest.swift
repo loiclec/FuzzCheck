@@ -5,7 +5,7 @@
 
 
 import XCTest
-@testable import Fuzzer
+@testable import FuzzCheck
 
 class ArtifactsTests: XCTestCase {
     /*

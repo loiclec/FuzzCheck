@@ -232,9 +232,9 @@ extension Fuzzer {
         guard let newUnitInfo = result else {
             return
         }
-        let effect = state.pool.append(newUnitInfo)
+        let effect = state.pool.add(newUnitInfo)
         try effect(&state.world)
-        state.pool.updateScoresAndWeights()
+
         state.world.reportEvent(.new, stats: state.stats)
     }
     
@@ -243,7 +243,7 @@ extension Fuzzer {
      Then repeatedly mutate and process the current unit, up to `mutateDepth` times.
      */
     func processNextUnits() throws {
-        let idx = state.pool.chooseUnitIdxToMutate(&state.world.rand)
+        let idx = state.pool.randomIndex(&state.world.rand)
         let unit = state.pool[idx].unit
         state.unit = unit
         for _ in 0 ..< state.settings.mutateDepth {

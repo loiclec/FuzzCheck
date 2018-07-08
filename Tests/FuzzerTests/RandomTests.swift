@@ -1,6 +1,6 @@
 
 import XCTest
-@testable import Fuzzer
+@testable import FuzzCheck
 
 class FuzzerTests: XCTestCase {
     func testWeightedPick() {

@@ -83,7 +83,7 @@ public struct CommandLineFuzzerWorldInfo {
     public var outputCorpus: Folder? = nil
     public var outputCorpusNames: Set<String> = []
     public var artifactsFolder: Folder? = Folder.current
-    public var artifactsNameSchema: ArtifactSchema.Name = ArtifactSchema.Name(atoms: [.hash], ext: nil)
+    public var artifactsNameSchema: ArtifactSchema.Name = ArtifactSchema.Name(components: [.hash], ext: nil)
     public var artifactsContentSchema: ArtifactSchema.Content = ArtifactSchema.Content(features: true, coverageScore: true, hash: false, complexity: false, kind: false)
     public init() {}
 }
@@ -216,4 +216,12 @@ public struct CommandLineFuzzerWorld <Unit, Properties> : FuzzerWorld
         print("exec/s: \(stats.executionsPerSecond)", terminator: "\t")
         print("rss: \(stats.rss)")
     }
+}
+
+/**
+ Return the hexadecimal representation of the given integer
+*/
+func hexString(_ h: Int) -> String {
+    let bits = UInt64(bitPattern: Int64(h))
+    return String(bits, radix: 16, uppercase: false)
 }

@@ -190,13 +190,13 @@ public struct CommandLineFuzzerWorld <Unit, Properties> : FuzzerWorld
     public func reportEvent(_ event: FuzzerEvent, stats: FuzzerStats) {
         switch event {
         case .start:
-            print("START\t")
+            print("START")
         case .done:
-            print("DONE\t")
+            print("DONE")
         case .new:
-            print("NEW\t")
+            print("NEW\t", terminator: "")
         case .didReadCorpus:
-            print("FINISHED READING CORPUS\t")
+            print("FINISHED READING CORPUS")
         case .caughtSignal(let signal):
             switch signal {
             case .illegalInstruction, .abort, .busError, .floatingPointException:

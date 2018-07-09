@@ -145,10 +145,11 @@ extension FuzzerState.UnitPool {
             }
         }
         units.append(unitInfo)
-        updateCoverageScores()
+        let worldUpdate1 = updateCoverageScores()
         cumulativeWeights = units.scan(0.0) { $0 + $1.coverageScore }
 
         return { w in
+            try worldUpdate1(&w)
             try w.addToOutputCorpus(unitInfo.unit)
         }
     }
@@ -161,7 +162,7 @@ extension FuzzerState.UnitPool {
      - Complexity: Proportional to the sum of `units[i].features.count` for each `i` in
        `units.indices` (i.e. expensive)
      */
-    func updateCoverageScores() {
+    func updateCoverageScores() -> (inout World) throws -> Void {
         /*
          NOTE: the logic for computing the coverage scores will probably change, but here
          is an explanation of the current behavior.
@@ -248,11 +249,18 @@ extension FuzzerState.UnitPool {
                 coverageScore += score
             }
         }
-        let prevCount = units.count
-        units.removeAll { $0.flaggedForDeletion }
-        if prevCount - units.count != 0 {
-            print("DELETE \(prevCount - units.count)")
+        let unitsToDelete = units.filter { $0.flaggedForDeletion }.map { $0.unit }
+        let worldUpdate: (inout World) throws -> Void = { [unitsToDelete] w in
+            for u in unitsToDelete {
+                try w.removeFromOutputCorpus(u)
+            }
+            if !unitsToDelete.isEmpty {
+                print("DELETE \(unitsToDelete.count)")
+            }
         }
+        
+        units.removeAll { $0.flaggedForDeletion }
+        return worldUpdate
     }
     
     /**

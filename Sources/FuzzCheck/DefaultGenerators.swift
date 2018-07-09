@@ -63,29 +63,22 @@ extension FuzzUnitGenerator {
     }
 }
 
-struct IntegerFuzzing <T: FixedWidthInteger & RandomInitializable> : FuzzUnit {
+public struct IntegerFuzzing <T: FixedWidthInteger & RandomInitializable> : FuzzUnit {
     
     let mutators = IntegerFuzzingMutators<T>()
-    let baseUnit = 0 as T
+    public let baseUnit = 0 as T
     
-    func mutate(_ x: inout T, _ r: inout Rand) -> Bool {
+    public init() { }
+    
+    public func mutate(_ x: inout T, _ r: inout Rand) -> Bool {
         return mutators.mutate(&x, &r)
     }
 
-    static func hash(of unit: T) -> Int {
+    public static func hash(of unit: T) -> Int {
         return unit.hashValue
     }
-    static func complexity(of: T) -> Double {
+    public static func complexity(of: T) -> Double {
         return Double(T.bitWidth) / 8
-    }
-}
-
-extension FixedWidthInteger where Self: UnsignedInteger {
-    public func complexity() -> Double {
-        return 1.0
-    }
-    public func hash() -> Int {
-        return self.hashValue
     }
 }
 

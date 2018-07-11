@@ -18,7 +18,7 @@ typealias PC = UInt
 /// to record code coverage. The code coverage consists of `Feature`s.
 /// For example, a feature might be the identifier of a code block/edge,
 /// or the result of a comparison operation for a certain program counter.
-public final class TraceProgramCounter: FuzzerSensor {
+public final class TraceProgramCounter: FuzzerSensor {    
     static let shared: TraceProgramCounter = .init()
     /// The maximum number of instrumented code edges allowed by TracePC.
     static let maxNumGuards: Int = 1 << 21

@@ -18,5 +18,5 @@ public protocol FuzzerSensorFeature {
     var reduced: Reduced { get }
     var score: Double { get }
 }
-extension Feature: FuzzerSensorFeature { }
+
 

@@ -5,30 +5,33 @@
 //  Created by Loïc Lecrenier on 27/05/2018.
 //
 
-public enum Feature: Equatable, Hashable {
-    case indirect(Indirect)
-    case edge(Edge)
-    case comparison(Comparison)
+extension TraceProgramCounter {
 
-    public enum Reduced: Equatable, Hashable {
-        case indirect(Indirect.Reduced)
-        case edge(Edge.Reduced)
-        case comparison(Comparison.Reduced)
-    }
-    
-    public var reduced: Reduced {
-        switch self {
-        case .indirect(let x):
-            return .indirect(x.reduced)
-        case .edge(let x):
-            return .edge(x.reduced)
-        case .comparison(let x):
-            return .comparison(x.reduced)
+    public enum Feature: FuzzerSensorFeature, Equatable, Hashable {
+        case indirect(Indirect)
+        case edge(Edge)
+        case comparison(Comparison)
+
+        public enum Reduced: Equatable, Hashable {
+            case indirect(Indirect.Reduced)
+            case edge(Edge.Reduced)
+            case comparison(Comparison.Reduced)
+        }
+        
+        public var reduced: Reduced {
+            switch self {
+            case .indirect(let x):
+                return .indirect(x.reduced)
+            case .edge(let x):
+                return .edge(x.reduced)
+            case .comparison(let x):
+                return .comparison(x.reduced)
+            }
         }
     }
 }
 
-extension Feature {
+extension TraceProgramCounter.Feature {
     public var score: Double {
         switch self {
         case .indirect(_):
@@ -52,7 +55,7 @@ func scoreFromCounter <T: BinaryInteger & FixedWidthInteger & UnsignedInteger> (
 }
 
 
-extension Feature {
+extension TraceProgramCounter.Feature {
     public struct Indirect: Equatable, Hashable {
         let caller: UInt
         let callee: UInt
@@ -101,19 +104,19 @@ extension Feature {
     }
 }
 
-extension Feature.Indirect: Comparable {
-    public static func < (lhs: Feature.Indirect, rhs: Feature.Indirect) -> Bool {
+extension TraceProgramCounter.Feature.Indirect: Comparable {
+    public static func < (lhs: TraceProgramCounter.Feature.Indirect, rhs: TraceProgramCounter.Feature.Indirect) -> Bool {
         return (lhs.caller, lhs.callee) < (rhs.caller, rhs.callee)
     }
 }
 
-extension Feature.Comparison.Reduced: Comparable {
-    public static func < (lhs: Feature.Comparison.Reduced, rhs: Feature.Comparison.Reduced) -> Bool {
+extension TraceProgramCounter.Feature.Comparison.Reduced: Comparable {
+    public static func < (lhs: TraceProgramCounter.Feature.Comparison.Reduced, rhs: TraceProgramCounter.Feature.Comparison.Reduced) -> Bool {
         return (lhs.pc, lhs.argxordist) < (rhs.pc, rhs.argxordist)
     }
 }
 
-extension Feature: Codable {
+extension TraceProgramCounter.Feature: Codable {
     enum Kind: String, Codable {
         case indirect
         case edge

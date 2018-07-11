@@ -18,10 +18,12 @@ public enum FuzzerTerminationStatus: Int32 {
  - state of the external world
  - etc.
  */
-public final class FuzzerState <Unit, Properties, World>
+public final class FuzzerState <Unit, Properties, World, Sensor>
     where
     World: FuzzerWorld,
     World.Unit == Unit,
+    Sensor: FuzzerSensor,
+    Sensor.Feature == World.Feature,
     Properties: FuzzUnitProperties,
     Properties.Unit == Unit
 {
@@ -35,6 +37,9 @@ public final class FuzzerState <Unit, Properties, World>
     var settings: FuzzerSettings
     /// The time at which the fuzzer started. Used for computing the average execution speed.
     var processStartTime: UInt = 0
+    // TODO
+    var sensor: Sensor
+    
     /**
      A property managing the effects and coeffects produced and needed by the fuzzer.
     
@@ -43,11 +48,12 @@ public final class FuzzerState <Unit, Properties, World>
      */
     var world: World
 
-    init(unit: Unit, settings: FuzzerSettings, world: World) {
+    init(unit: Unit, settings: FuzzerSettings, world: World, sensor: Sensor) {
         self.unit = unit
         self.stats = FuzzerStats()
         self.settings = settings
         self.world = world
+        self.sensor = sensor
     }
 
     /// Gather statistics about the state of the fuzzer and store them in `self.stats`.
@@ -56,7 +62,6 @@ public final class FuzzerState <Unit, Properties, World>
         let seconds = Double(now - processStartTime) / 1_000_000
         stats.executionsPerSecond = Int((Double(stats.totalNumberOfRuns) / seconds).rounded())
         stats.poolSize = pool.units.count
-        stats.totalEdgeCoverage = TracePC.getTotalEdgeCoverage()
         stats.score = pool.coverageScore.rounded()
         stats.rss = Int(world.getPeakMemoryUsage())
     }
@@ -66,9 +71,8 @@ public final class FuzzerState <Unit, Properties, World>
         world.reportEvent(.caughtSignal(signal), stats: stats)
         switch signal {
         case .illegalInstruction, .abort, .busError, .floatingPointException:
-            TracePC.crashed = true
-            var features: [Feature] = []
-            TracePC.collectFeatures { features.append($0) }
+            var features: [Sensor.Feature] = []
+            sensor.collectFeatures { features.append($0) }
             try! world.saveArtifact(unit: unit, features: features, coverage: pool.coverageScore, kind: .crash)
             exit(FuzzerTerminationStatus.crash.rawValue)
             
@@ -81,40 +85,43 @@ public final class FuzzerState <Unit, Properties, World>
     }
 }
 
-/// A fuzzer meant to be used from the command line
-public typealias CommandLineFuzzer <FuzzUnit: FuzzUnit> = Fuzzer<FuzzUnit.Unit, FuzzUnit, FuzzUnit, CommandLineFuzzerWorld<FuzzUnit.Unit, FuzzUnit>> where FuzzUnit.Unit: Codable
-
 /**
  A fuzzer can fuzz-test a function `test: (Unit) -> Bool`. It finds values of
  `Unit` for which `test` returns `false` or crashes.
  
- It is configurable by three generic type parameters:
+ It is configurable by four generic type parameters:
  - `Generator` defines how to generate and evolve values of type `Unit`
  - `Properties` defines how to compute essential properties of `Unit` (such as their complexities or hash values)
  - `World` regulates the communication between the Fuzzer and the real-world,
    such as the file system, time, or random number generator.
+ - `Sensor` collects, from a test function execution, the measurements to optimize (e.g. code coverage)
+ 
+ This type is a bit too complex to make part of the public API and end users
+ should only used (partly) specialized versions of it, like CommandLineFuzzer.
  */
-public final class Fuzzer <Unit, Generator, Properties, World>
+final class Fuzzer <Unit, Generator, Properties, World, Sensor>
     where
     Generator: FuzzUnitGenerator,
     Properties: FuzzUnitProperties,
     World: FuzzerWorld,
+    Sensor: FuzzerSensor,
+    World.Feature == Sensor.Feature,
     Generator.Unit == Unit,
     Properties.Unit == Unit,
     World.Unit == Unit
 {
     
-    typealias State = FuzzerState<Unit, Properties, World>
+    typealias State = FuzzerState<Unit, Properties, World, Sensor>
     
     let state: State
     let generator: Generator
     let test: (Unit) -> Bool
     let signalsHandler: SignalsHandler
     
-    public init(test: @escaping (Unit) -> Bool, generator: Generator, settings: FuzzerSettings, world: World) {
+    init(test: @escaping (Unit) -> Bool, generator: Generator, settings: FuzzerSettings, world: World, sensor: Sensor) {
         self.generator = generator
         self.test = test
-        self.state = State(unit: generator.baseUnit, settings: settings, world: world)
+        self.state = State(unit: generator.baseUnit, settings: settings, world: world, sensor: sensor)
     
         let signals: [Signal] = [.segmentationViolation, .busError, .abort, .illegalInstruction, .floatingPointException, .interrupt, .softwareTermination, .fileSizeLimitExceeded]
         
@@ -123,19 +130,25 @@ public final class Fuzzer <Unit, Generator, Properties, World>
         }
         
         precondition(Foundation.Thread.isMainThread, "Fuzzer can only be initialized on the main thread")
-        
+        // :shame:
         let idx = Foundation.Thread.callStackSymbols.firstIndex(where: { $0.contains(" main + ")})!
         let adr = Foundation.Thread.callStackReturnAddresses[idx].uintValue
         NormalizedPC.constant = adr
     }
 }
 
-extension Fuzzer where Unit: Codable, Properties == Generator, World == CommandLineFuzzerWorld<Generator.Unit, Generator> {
-    
-    
+public enum CommandLineFuzzer <Unit, Generator, Properties>
+    where
+    Generator: FuzzUnitGenerator,
+    Properties: FuzzUnitProperties,
+    Generator.Unit == Unit,
+    Properties.Unit == Unit,
+    Unit: Codable
+{
+    typealias SpecializedFuzzer = Fuzzer<Unit, Generator, Properties, CommandLineFuzzerWorld<Unit, Properties>, TraceProgramCounter>
+
     /// Execute the fuzzer command given by `Commandline.arguments` for the given test function and generator.
-    public static func launch(test: @escaping (Unit) -> Bool, generator: Generator) throws {
-        
+    public static func launch(test: @escaping (Unit) -> Bool, generator: Generator, properties: Properties.Type) throws {
         let (parser, settingsBinder, worldBinder, _) = CommandLineFuzzerWorldInfo.argumentsParser()
         do {
             let res = try parser.parse(Array(CommandLine.arguments.dropFirst()))
@@ -143,8 +156,8 @@ extension Fuzzer where Unit: Codable, Properties == Generator, World == CommandL
             try settingsBinder.fill(parseResult: res, into: &settings)
             var world: CommandLineFuzzerWorldInfo = CommandLineFuzzerWorldInfo()
             try worldBinder.fill(parseResult: res, into: &world)
-
-            let fuzzer = Fuzzer(test: test, generator: generator, settings: settings, world: CommandLineFuzzerWorld(info: world))
+            
+            let fuzzer = SpecializedFuzzer(test: test, generator: generator, settings: settings, world: CommandLineFuzzerWorld(info: world), sensor: .shared)
             switch fuzzer.state.settings.command {
             case .fuzz:
                 try fuzzer.loop()
@@ -167,16 +180,16 @@ extension Fuzzer {
      Exit and save the artifact if the test function failed.
     */
     func testCurrentUnit() {
-        TracePC.resetTestRecordings()
+        state.sensor.resetCollectedFeatures()
 
-        TracePC.recording = true
+        state.sensor.isRecording = true
         let success = test(state.unit)
-        TracePC.recording = false
+        state.sensor.isRecording = false
 
         guard success else {
             state.world.reportEvent(.testFailure, stats: state.stats)
-            var features: [Feature] = []
-            TracePC.collectFeatures { features.append($0) }
+            var features: [Sensor.Feature] = []
+            state.sensor.collectFeatures { features.append($0) }
             try! state.world.saveArtifact(unit: state.unit, features: features, coverage: state.pool.coverageScore, kind: .testFailure)
             exit(FuzzerTerminationStatus.testFailure.rawValue)
         }
@@ -192,10 +205,10 @@ extension Fuzzer {
     func analyze() -> State.UnitPool.UnitInfo? {
         let currentUnitComplexity = Properties.complexity(of: state.unit)
         
-        var bestUnitForFeatures: [Feature] = []
-        var otherFeatures: [Feature] = []
+        var bestUnitForFeatures: [Sensor.Feature] = []
+        var otherFeatures: [Sensor.Feature] = []
         
-        TracePC.collectFeatures { feature in
+        state.sensor.collectFeatures { feature in
             guard let oldComplexity = state.pool.smallestUnitComplexityForFeature[feature.reduced] else {
                 bestUnitForFeatures.append(feature)
                 return

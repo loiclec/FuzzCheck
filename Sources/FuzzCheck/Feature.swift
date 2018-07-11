@@ -10,13 +10,13 @@ public enum Feature: Equatable, Hashable {
     case edge(Edge)
     case comparison(Comparison)
 
-    enum Reduced: Equatable, Hashable {
+    public enum Reduced: Equatable, Hashable {
         case indirect(Indirect.Reduced)
         case edge(Edge.Reduced)
         case comparison(Comparison.Reduced)
     }
     
-    var reduced: Reduced {
+    public var reduced: Reduced {
         switch self {
         case .indirect(let x):
             return .indirect(x.reduced)
@@ -29,7 +29,7 @@ public enum Feature: Equatable, Hashable {
 }
 
 extension Feature {
-    var score: Double {
+    public var score: Double {
         switch self {
         case .indirect(_):
             return 1
@@ -57,7 +57,7 @@ extension Feature {
         let caller: UInt
         let callee: UInt
     
-        typealias Reduced = Indirect
+        public typealias Reduced = Indirect
         var reduced: Reduced { return self }
     }
     public struct Edge: Equatable, Hashable {
@@ -69,7 +69,7 @@ extension Feature {
             self.counter = counter
         }
         
-        struct Reduced: Equatable, Hashable {
+        public struct Reduced: Equatable, Hashable {
             let pcguard: UInt
             let intensity: UInt8
         }
@@ -90,7 +90,7 @@ extension Feature {
             self.arg2 = arg2
         }
         
-        struct Reduced: Equatable, Hashable {
+        public struct Reduced: Equatable, Hashable {
             let pc: UInt
             let argxordist: UInt8
         }

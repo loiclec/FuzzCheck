@@ -43,7 +43,7 @@ extension FuzzerState {
             /// The complexity of the unit
             let complexity: Double
             /// The code coverage features triggered by feeding the unit to the test function
-            let features: [Feature]
+            let features: [Sensor.Feature]
             
             /**
              The relative coverage score of the unit in the pool.
@@ -60,7 +60,7 @@ extension FuzzerState {
             // implemented in the stdlib and it's not worth reimplementing here
             var flaggedForDeletion: Bool
         
-            init(unit: Unit, complexity: Double, features: [Feature]) {
+            init(unit: Unit, complexity: Double, features: [Sensor.Feature]) {
                 self.unit = unit
                 self.complexity = complexity
                 self.features = features
@@ -95,7 +95,7 @@ extension FuzzerState {
          
          Every feature that has ever been recorded by the fuzzer should be in this dictionary.
         */
-        var smallestUnitComplexityForFeature: [Feature.Reduced: Double] = [:]
+        var smallestUnitComplexityForFeature: [Sensor.Feature.Reduced: Double] = [:]
     }
 }
 
@@ -209,7 +209,7 @@ extension FuzzerState.UnitPool {
         }
         
         coverageScore = 0
-        var sumComplexityRatios: [Feature.Reduced: Double] = [:]
+        var sumComplexityRatios: [Sensor.Feature.Reduced: Double] = [:]
         for (u, idx) in zip(units, units.indices) {
             units[idx].flaggedForDeletion = true
             units[idx].coverageScore = 0
@@ -274,7 +274,7 @@ extension FuzzerState.UnitPool {
         }
         
         coverageScore = 0
-        var sumComplexityRatios: [Feature.Reduced: Double] = [:]
+        var sumComplexityRatios: [Sensor.Feature.Reduced: Double] = [:]
         for (u, idx) in zip(units, units.indices) {
             units[idx].flaggedForDeletion = true
             units[idx].coverageScore = 0

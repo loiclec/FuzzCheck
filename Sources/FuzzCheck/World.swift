@@ -27,7 +27,7 @@ public enum FuzzerEvent {
 public protocol FuzzerWorld {
     associatedtype Unit
     associatedtype Properties: FuzzUnitProperties where Properties.Unit == Unit
-    
+    associatedtype Feature: Codable
     
     mutating func getPeakMemoryUsage() -> UInt
     mutating func clock() -> UInt
@@ -46,7 +46,6 @@ public protocol FuzzerWorld {
 
 public struct FuzzerStats {
     public var totalNumberOfRuns: Int = 0
-    public var totalEdgeCoverage: Int = 0
     public var score: Double = 0
     public var poolSize: Int = 0
     public var executionsPerSecond: Int = 0
@@ -210,7 +209,6 @@ public struct CommandLineFuzzerWorld <Unit, Properties> : FuzzerWorld
             print("\n================ TEST FAILED ================")
         }
         print("\(stats.totalNumberOfRuns)", terminator: "\t")
-        print("cov: \(stats.totalEdgeCoverage)", terminator: "\t")
         print("score: \(stats.score)", terminator: "\t")
         print("corp: \(stats.poolSize)", terminator: "\t")
         print("exec/s: \(stats.executionsPerSecond)", terminator: "\t")

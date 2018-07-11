@@ -80,15 +80,6 @@ extension RandomNumberGenerator {
     }
 }
 
-
-extension FuzzerPRNG {
-    mutating func shuffle <C> (_ c: inout C) where C: MutableCollection, C: RandomAccessCollection, C.Index: RandomRangeInitializable {
-        for i in c.indices.reversed() {
-            c.swapAt(C.Index.random(in: c.startIndex ..< c.index(after: i), using: &self), i)
-        }
-    }
-}
-
 extension Sequence {
     public func scan <T> (_ initial: T, _ acc: (T, Element) -> T) -> [T] {
         var results: [T] = []
@@ -106,20 +97,6 @@ public enum BinarySearchOrdering {
     case match
     case greater
 }
-
-extension BinarySearchOrdering {
-    public var opposite: BinarySearchOrdering {
-        switch self {
-        case .less:
-            return .greater
-        case .match:
-            return .match
-        case .greater:
-            return .less
-        }
-    }
-}
-
 
 extension RandomAccessCollection {
     public func binarySearch(compare: (Element) -> BinarySearchOrdering) -> BinarySearchResult<Index> {

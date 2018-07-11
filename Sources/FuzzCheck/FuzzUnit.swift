@@ -1,23 +1,23 @@
 
-/// A protocol defining how to generate and mutate values of type Unit.
-public protocol FuzzUnitGenerator {
+/// A protocol defining how to generate and mutate values of type Input.
+public protocol FuzzerInputGenerator {
     
-    associatedtype Unit
+    associatedtype Input
     
     /**
-     The simplest value of `Unit`.
+     The simplest value of `Input`.
      
-     Having a perfect value for `baseUnit` is not essential to FuzzCheck.
+     Having a perfect value for `baseInput` is not essential to FuzzCheck.
      
      ## Examples
      - the empty array
      - the number 0
-     - an arbitrary value if `Unit` doesn't have a “simplest” value
+     - an arbitrary value if `Input` doesn't have a “simplest” value
     */
-    var baseUnit: Unit { get }
+    var baseInput: Input { get }
     
     /**
-     Returns an array of initial units to fuzz-test.
+     Returns an array of initial inputs to fuzz-test.
      
      The elements of the array should be different from each other, and
      each one of them should be interesting in its own way.
@@ -30,23 +30,23 @@ public protocol FuzzUnitGenerator {
      
      - Parameter rand: a source of randomness
     */
-    func initialUnits(_ rand: inout Rand) -> [Unit]
+    func initialInputs(_ rand: inout Rand) -> [Input]
     
     /**
-     Mutate the given unit.
+     Mutate the given input.
      
      FuzzCheck will call this method repeatedly in order to explore all the
-     possible values of Unit. It is therefore important that it is implemented
+     possible values of Input. It is therefore important that it is implemented
      efficiently.
      
-     It should be theoretically possible to mutate any arbitrary unit `u1` into any
-     other arbitrary unit `u2` by calling `mutate` repeatedly.
+     It should be theoretically possible to mutate any arbitrary input `u1` into any
+     other arbitrary input `u2` by calling `mutate` repeatedly.
      
      Moreover, the result of `mutate` should try to be “interesting” to FuzzCheck.
      That is, it should be likely to trigger new code paths when passed to the
      test function.
      
-     A good approach to implement this method is to use a `FuzzUnitMutators`.
+     A good approach to implement this method is to use a `FuzzerInputMutatorGroup`.
      
      ## Examples
      - append a random element to an array
@@ -55,26 +55,26 @@ public protocol FuzzUnitGenerator {
      - change an integer to Int.min or Int.max or 0
      - replace a substring by a keyword relevant to the test function
      
-     - Parameter unit: the unit to mutate
+     - Parameter input: the input to mutate
      - Parameter rand: a source of randomness
-     - Returns: true iff the unit was actually mutated
+     - Returns: true iff the input was actually mutated
     */
-    func mutate(_ unit: inout Unit, _ rand: inout Rand) -> Bool
+    func mutate(_ input: inout Input, _ rand: inout Rand) -> Bool
 }
 
 /**
- A protocol giving some information about values of type Unit, such as its complexity or hash.
+ A protocol giving some information about values of type Input, such as its complexity or hash.
  
- Unit itself is not required to conform to any protocol...:
+ Input itself is not required to conform to any protocol...:
 - to allow multiple different implementations to coexist
 - to allow fuzz-testing of non-nominal types
  */
-public protocol FuzzUnitProperties {
-    associatedtype Unit
+public protocol FuzzerInputProperties {
+    associatedtype Input
     /**
-     Returns the complexity of the given unit.
+     Returns the complexity of the given input.
      
-     FuzzCheck will prefer using units with a smaller complexity.
+     FuzzCheck will prefer using inputs with a smaller complexity.
      
      - Important: The return value must be >= 0
      
@@ -82,15 +82,11 @@ public protocol FuzzUnitProperties {
      - an array might have a complexity equal to the sum of complexities of its elements
      - an integer might have a complexity equal to the number of bytes used to represent it
      */
-    static func complexity(of unit: Unit) -> Double
+    static func complexity(of input: Input) -> Double
     
-    /// - Returns: the hash value of the given unit
-    static func hash(of unit: Unit) -> Int
+    /// - Returns: the hash value of the given input
+    static func hash(of input: Input) -> Int
 }
-
-/// Types conforming to this protocol contain all the necessary information
-/// to fuzz-test values of the associated type Unit.
-public protocol FuzzUnit: FuzzUnitGenerator, FuzzUnitProperties { }
 
 /**
  A type providing a list of weighted mutators.
@@ -98,19 +94,19 @@ public protocol FuzzUnit: FuzzUnitGenerator, FuzzUnitProperties { }
  The weight of a mutator determines how often it should be used relative to
  the other mutators in the list.
  */
-public protocol FuzzUnitMutators {
-    associatedtype Unit
+public protocol FuzzerInputMutatorGroup {
+    associatedtype Input
     associatedtype Mutator
 
     /**
-     Mutate the given unit using the given mutator and source of randomness.
+     Mutate the given input using the given mutator and source of randomness.
      
-     - Parameter unit: the unit to mutate
-     - Parameter mutator: the mutator to use to mutate the unit
+     - Parameter input: the input to mutate
+     - Parameter mutator: the mutator to use to mutate the input
      - Parameter rand: a source of randomness
-     - Returns: true iff the unit was actually mutated
+     - Returns: true iff the input was actually mutated
     */
-    func mutate(_ unit: inout Unit, with mutator: Mutator, _ rand: inout Rand) -> Bool
+    func mutate(_ input: inout Input, with mutator: Mutator, _ rand: inout Rand) -> Bool
     
     /**
      A list of mutators and their associated weight.
@@ -124,19 +120,19 @@ public protocol FuzzUnitMutators {
     var weightedMutators: [(Mutator, UInt)] { get }
 }
 
-extension FuzzUnitMutators {
+extension FuzzerInputMutatorGroup {
     /**
-     Choose a mutator from the list of weighted mutators and execute it on `unit`.
+     Choose a mutator from the list of weighted mutators and execute it on `input`.
      
-     - Parameter unit: the unit to mutate
-     - Parameter mutator: the mutator to use to mutate the unit
+     - Parameter input: the input to mutate
+     - Parameter mutator: the mutator to use to mutate the input
      - Parameter rand: a source of randomness
-     - Returns: true iff the unit was actually mutated
+     - Returns: true iff the input was actually mutated
      */
-    public func mutate(_ unit: inout Unit, _ rand: inout Rand) -> Bool {
+    public func mutate(_ input: inout Input, _ rand: inout Rand) -> Bool {
         for _ in 0 ..< weightedMutators.count {
             let mutator = rand.weightedRandomElement(from: weightedMutators, minimum: 0)
-            if mutate(&unit, with: mutator, &rand) { return true }
+            if mutate(&input, with: mutator, &rand) { return true }
         }
         return false
     }

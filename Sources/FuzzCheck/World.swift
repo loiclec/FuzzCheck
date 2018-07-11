@@ -14,7 +14,7 @@ public enum FuzzerEvent {
     case start
     /// The fuzzing process ended
     case done
-    /// A new interesting unit was discovered
+    /// A new interesting input was discovered
     case new
     /// The initial corpus has been process
     case didReadCorpus
@@ -25,21 +25,21 @@ public enum FuzzerEvent {
 }
 
 public protocol FuzzerWorld {
-    associatedtype Unit
-    associatedtype Properties: FuzzUnitProperties where Properties.Unit == Unit
+    associatedtype Input
+    associatedtype Properties: FuzzerInputProperties where Properties.Input == Input
     associatedtype Feature: Codable
     
     mutating func getPeakMemoryUsage() -> UInt
     mutating func clock() -> UInt
-    mutating func readInputCorpus() throws -> [Unit]
-    mutating func readInputFile() throws -> Unit
+    mutating func readInputCorpus() throws -> [Input]
+    mutating func readInputFile() throws -> Input
     
-    mutating func saveArtifact(unit: Unit, features: [Feature]?, coverage: Double?, kind: ArtifactKind) throws
-    mutating func addToOutputCorpus(_ unit: Unit) throws
-    mutating func removeFromOutputCorpus(_ unit: Unit) throws
+    mutating func saveArtifact(input: Input, features: [Feature]?, coverage: Double?, kind: ArtifactKind) throws
+    mutating func addToOutputCorpus(_ input: Input) throws
+    mutating func removeFromOutputCorpus(_ input: Input) throws
     mutating func reportEvent(_ event: FuzzerEvent, stats: FuzzerStats)
     
-    mutating func readInputCorpusWithFeatures() throws -> [(Unit, [Feature])]
+    mutating func readInputCorpusWithFeatures() throws -> [(Input, [Feature])]
     
     var rand: Rand { get set }
 }
@@ -63,14 +63,14 @@ public struct FuzzerSettings {
     public var command: Command
     public var iterationTimeout: UInt
     public var maxNumberOfRuns: Int
-    public var maxUnitComplexity: Double
+    public var maxInputComplexity: Double
     public var mutateDepth: Int
     
-    public init(command: Command = .fuzz, iterationTimeout: UInt = UInt.max, maxNumberOfRuns: Int = Int.max, maxUnitComplexity: Double = 256.0, mutateDepth: Int = 3) {
+    public init(command: Command = .fuzz, iterationTimeout: UInt = UInt.max, maxNumberOfRuns: Int = Int.max, maxInputComplexity: Double = 256.0, mutateDepth: Int = 3) {
         self.command = command
         self.iterationTimeout = iterationTimeout
         self.maxNumberOfRuns = maxNumberOfRuns
-        self.maxUnitComplexity = maxUnitComplexity
+        self.maxInputComplexity = maxInputComplexity
         self.mutateDepth = mutateDepth
     }
 }
@@ -87,11 +87,11 @@ public struct CommandLineFuzzerWorldInfo {
     public init() {}
 }
 
-public struct CommandLineFuzzerWorld <Unit, Properties> : FuzzerWorld
+public struct CommandLineFuzzerWorld <Input, Properties> : FuzzerWorld
     where
-    Unit: Codable,
-    Properties: FuzzUnitProperties,
-    Properties.Unit == Unit
+    Input: Codable,
+    Properties: FuzzerInputProperties,
+    Properties.Input == Input
 {
     public typealias Feature = CodeCoverageSensor.Feature
     
@@ -116,13 +116,13 @@ public struct CommandLineFuzzerWorld <Unit, Properties> : FuzzerWorld
         return UInt(r.ru_maxrss) >> 20
     }
     
-    public func saveArtifact(unit: Unit, features: [Feature]?, coverage: Double?, kind: ArtifactKind) throws {
+    public func saveArtifact(input: Input, features: [Feature]?, coverage: Double?, kind: ArtifactKind) throws {
         guard let artifactsFolder = info.artifactsFolder else {
             return
         }
-        let complexity = Properties.complexity(of: unit)
-        let hash = Properties.hash(of: unit)
-        let content = Artifact.Content.init(schema: info.artifactsContentSchema, unit: unit, features: features, coverage: coverage, hash: hash, complexity: complexity, kind: kind)
+        let complexity = Properties.complexity(of: input)
+        let hash = Properties.hash(of: input)
+        let content = Artifact.Content.init(schema: info.artifactsContentSchema, input: input, features: features, coverage: coverage, hash: hash, complexity: complexity, kind: kind)
         let encoder = JSONEncoder()
         encoder.outputFormatting = .prettyPrinted
         let data = try encoder.encode(content)
@@ -139,28 +139,28 @@ public struct CommandLineFuzzerWorld <Unit, Properties> : FuzzerWorld
         return Set(artifactsFolder.files.map { $0.name })
     }
     
-    public func readInputFile() throws -> Unit {
+    public func readInputFile() throws -> Input {
         let decoder = JSONDecoder()
         
         let data = try info.inputFile!.read()
-        return try decoder.decode(Artifact<Unit>.Content.self, from: data).unit
+        return try decoder.decode(Artifact<Input>.Content.self, from: data).input
     }
     
-    public func readInputCorpus() throws -> [Unit] {
+    public func readInputCorpus() throws -> [Input] {
         let decoder = JSONDecoder()
         return try info.inputCorpora
             .flatMap { $0.files }
-            .map { try decoder.decode(Artifact<Unit>.Content.self, from: $0.read()).unit }
+            .map { try decoder.decode(Artifact<Input>.Content.self, from: $0.read()).input }
     }
     
-    public mutating func readInputCorpusWithFeatures() throws -> [(Unit, [Feature])] {
+    public mutating func readInputCorpusWithFeatures() throws -> [(Input, [Feature])] {
         let decoder = JSONDecoder()
 
         let artifacts = info.inputCorpora
             .flatMap { $0.files }
-            .map { file -> Artifact<Unit>.Content in
+            .map { file -> Artifact<Input>.Content in
                 do {
-                    return try decoder.decode(Artifact<Unit>.Content.self, from: file.read())
+                    return try decoder.decode(Artifact<Input>.Content.self, from: file.read())
                 } catch let e {
                     print(e)
                     sleep(4)
@@ -168,21 +168,21 @@ public struct CommandLineFuzzerWorld <Unit, Properties> : FuzzerWorld
                 }
             }
         return artifacts.map { c in
-            (c.unit, c.features!)
+            (c.input, c.features!)
         }
     }
     
-    public func removeFromOutputCorpus(_ unit: Unit) throws {
+    public func removeFromOutputCorpus(_ input: Input) throws {
         guard let outputCorpus = info.outputCorpus else { return }
-        try outputCorpus.file(named: hexString(Properties.hash(of: unit))).delete()
+        try outputCorpus.file(named: hexString(Properties.hash(of: input))).delete()
     }
     
-    public mutating func addToOutputCorpus(_ unit: Unit) throws {
+    public mutating func addToOutputCorpus(_ input: Input) throws {
         guard let outputCorpus = info.outputCorpus else { return }
         let encoder = JSONEncoder()
         encoder.outputFormatting = .prettyPrinted
-        let data = try encoder.encode(unit)
-        let nameInfo = ArtifactNameInfo(hash: Properties.hash(of: unit), complexity: Properties.complexity(of: unit), kind: .unit)
+        let data = try encoder.encode(input)
+        let nameInfo = ArtifactNameInfo(hash: Properties.hash(of: input), complexity: Properties.complexity(of: input), kind: .input)
         let name = ArtifactNameWithoutIndex(schema: info.artifactsNameSchema, info: nameInfo).fillGapToBeUnique(from: [])
         info.outputCorpusNames.insert(name)
         try outputCorpus.createFileIfNeeded(withName: name, contents: data)

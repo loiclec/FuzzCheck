@@ -53,7 +53,7 @@ func minimizeCommand(settings: FuzzerManagerSettings, workerSettings: FuzzerSett
     // we create this simple wrapper type to decode it
     /** e.g.
      {
-        unit: {...},
+        input: {...},
         complexity: 23.3
      }
     */
@@ -61,7 +61,7 @@ func minimizeCommand(settings: FuzzerManagerSettings, workerSettings: FuzzerSett
         let complexity: Double
     }
     
-    /// Return the artifact file containing the simplest unit, or nil if the artifacts folder is empty
+    /// Return the artifact file containing the simplest input, or nil if the artifacts folder is empty
     func simplestInputFile() -> File? {
         let filesWithComplexity = artifactsFolder.files.map { f -> (File, Double) in
             (f, try! JSONDecoder().decode(Complexity.self, from: f.read()).complexity)

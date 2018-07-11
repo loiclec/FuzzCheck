@@ -17,7 +17,7 @@ Steps:
 - read sample inputs from a list of input folders
 - feed these inputs to a test Swift function
 - analyze the code coverage triggered by each input
-- the most interesting inputs are kept in an in-memory pool of units
+- the most interesting inputs are kept in an in-memory pool of inputs
 - then, repeatedly:
     - randomly select an input from the in-memory pool
     - apply random mutations to that input
@@ -124,14 +124,14 @@ extension CommandLineFuzzerWorldInfo {
             option: "--max-complexity",
             shortName: "-cplx",
             kind: Double.self,
-            usage: "The upper bound complexity of the test units",
+            usage: "The upper bound complexity of the test inputs",
             completion: nil
         )
         let mutationDepth = parser.add(
             option: "--mutation-depth",
             shortName: "-mut",
             kind: UInt.self,
-            usage: "The number of consecutive mutations applied to a unit in a single iteration",
+            usage: "The number of consecutive mutations applied to an input in a single iteration",
             completion: nil
         )
         let globalTimeout = parser.add(
@@ -222,7 +222,7 @@ extension CommandLineFuzzerWorldInfo {
         )
         
         settingsBinder.bind(option: maxNumberOfRuns) { $0.maxNumberOfRuns = Int($1) }
-        settingsBinder.bind(option: maxComplexity) { $0.maxUnitComplexity = $1 }
+        settingsBinder.bind(option: maxComplexity) { $0.maxInputComplexity = $1 }
         settingsBinder.bind(option: mutationDepth) { $0.mutateDepth = Int($1) }
         settingsBinder.bind(option: iterationTimeout) { $0.iterationTimeout = $1 }
         settingsBinder.bind(option: command) { $0.command = $1 }
@@ -263,7 +263,7 @@ extension FuzzerSettings {
     public var commandLineArguments: [String] {
         var args: [String] = []
         args += ["--command", "\(command)"]
-        args += ["--max-complexity", "\(maxUnitComplexity)"]
+        args += ["--max-complexity", "\(maxInputComplexity)"]
         args += ["--iteration-timeout", "\(iterationTimeout)"]
         args += ["--max-number-of-runs", "\(maxNumberOfRuns)"]
         args += ["--mutation-depth", "\(mutateDepth)"]

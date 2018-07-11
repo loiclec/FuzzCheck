@@ -93,7 +93,7 @@ public struct CommandLineFuzzerWorld <Unit, Properties> : FuzzerWorld
     Properties: FuzzUnitProperties,
     Properties.Unit == Unit
 {
-    public typealias Feature = TraceProgramCounter.Feature
+    public typealias Feature = CodeCoverageSensor.Feature
     
     public var info: CommandLineFuzzerWorldInfo
     public var rand: Rand {

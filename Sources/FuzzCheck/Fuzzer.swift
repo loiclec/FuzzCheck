@@ -145,7 +145,7 @@ public enum CommandLineFuzzer <Unit, Generator, Properties>
     Properties.Unit == Unit,
     Unit: Codable
 {
-    typealias SpecializedFuzzer = Fuzzer<Unit, Generator, Properties, CommandLineFuzzerWorld<Unit, Properties>, TraceProgramCounter>
+    typealias SpecializedFuzzer = Fuzzer<Unit, Generator, Properties, CommandLineFuzzerWorld<Unit, Properties>, CodeCoverageSensor>
 
     /// Execute the fuzzer command given by `Commandline.arguments` for the given test function and generator.
     public static func launch(test: @escaping (Unit) -> Bool, generator: Generator, properties: Properties.Type) throws {

@@ -5,7 +5,7 @@
 //  Created by Loïc Lecrenier on 27/05/2018.
 //
 
-extension TraceProgramCounter {
+extension CodeCoverageSensor {
 
     public enum Feature: FuzzerSensorFeature, Equatable, Hashable {
         case indirect(Indirect)
@@ -31,7 +31,7 @@ extension TraceProgramCounter {
     }
 }
 
-extension TraceProgramCounter.Feature {
+extension CodeCoverageSensor.Feature {
     public var score: Double {
         switch self {
         case .indirect(_):
@@ -55,7 +55,7 @@ func scoreFromCounter <T: BinaryInteger & FixedWidthInteger & UnsignedInteger> (
 }
 
 
-extension TraceProgramCounter.Feature {
+extension CodeCoverageSensor.Feature {
     public struct Indirect: Equatable, Hashable {
         let caller: UInt
         let callee: UInt
@@ -104,19 +104,19 @@ extension TraceProgramCounter.Feature {
     }
 }
 
-extension TraceProgramCounter.Feature.Indirect: Comparable {
-    public static func < (lhs: TraceProgramCounter.Feature.Indirect, rhs: TraceProgramCounter.Feature.Indirect) -> Bool {
+extension CodeCoverageSensor.Feature.Indirect: Comparable {
+    public static func < (lhs: CodeCoverageSensor.Feature.Indirect, rhs: CodeCoverageSensor.Feature.Indirect) -> Bool {
         return (lhs.caller, lhs.callee) < (rhs.caller, rhs.callee)
     }
 }
 
-extension TraceProgramCounter.Feature.Comparison.Reduced: Comparable {
-    public static func < (lhs: TraceProgramCounter.Feature.Comparison.Reduced, rhs: TraceProgramCounter.Feature.Comparison.Reduced) -> Bool {
+extension CodeCoverageSensor.Feature.Comparison.Reduced: Comparable {
+    public static func < (lhs: CodeCoverageSensor.Feature.Comparison.Reduced, rhs: CodeCoverageSensor.Feature.Comparison.Reduced) -> Bool {
         return (lhs.pc, lhs.argxordist) < (rhs.pc, rhs.argxordist)
     }
 }
 
-extension TraceProgramCounter.Feature: Codable {
+extension CodeCoverageSensor.Feature: Codable {
     enum Kind: String, Codable {
         case indirect
         case edge

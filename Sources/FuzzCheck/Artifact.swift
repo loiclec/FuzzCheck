@@ -35,7 +35,7 @@ public struct Artifact <Unit: Codable> {
         /// The test input that the artifact file describes
         let unit: Unit
         /// The code coverage features discovered by that test input.
-        let features: [TraceProgramCounter.Feature]?
+        let features: [CodeCoverageSensor.Feature]?
         /// The code coverage score of the input, which can depend on the state
         /// of the fuzzer's unit pool at the time the artifact was generated.
         let coverageScore: Double?
@@ -103,7 +103,7 @@ public struct ArtifactSchema {
 }
 
 extension Artifact.Content {
-    init(schema: ArtifactSchema.Content, unit: Unit, features: [TraceProgramCounter.Feature]?, coverage: Double?, hash: Int?, complexity: Double?, kind: ArtifactKind) {
+    init(schema: ArtifactSchema.Content, unit: Unit, features: [CodeCoverageSensor.Feature]?, coverage: Double?, hash: Int?, complexity: Double?, kind: ArtifactKind) {
         self.unit = unit
         self.features = schema.features ? features : nil
         self.coverageScore = schema.coverageScore ? coverage : nil
@@ -297,7 +297,7 @@ extension Artifact.Content: Codable {
             self.complexity = try container.decodeIfPresent(Double.self, forKey: .complexity)
             self.coverageScore = try container.decodeIfPresent(Double.self, forKey: .coverage)
             self.hash = try container.decodeIfPresent(Int.self, forKey: .hash)
-            self.features = try container.decodeIfPresent(Array<TraceProgramCounter.Feature>.self, forKey: .features)
+            self.features = try container.decodeIfPresent(Array<CodeCoverageSensor.Feature>.self, forKey: .features)
             self.kind = try container.decodeIfPresent(ArtifactKind.self, forKey: .kind)
         }
     }

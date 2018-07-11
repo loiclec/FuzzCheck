@@ -1,4 +1,7 @@
 
+// I didn't want to implement my own random number generator, but I didn't
+// find a single one that can be seeded manually. Send help plz.
+
 public struct FuzzerPRNG: RandomNumberGenerator {
     
     public var seed: UInt32

@@ -14,10 +14,9 @@ extension UnsafeMutableBufferPointer {
 /// Program Counter: the index of an instruction in the binary
 typealias PC = UInt
 
-/// Trace-Program-Counters: a namespace holding the data and functions
-/// to record code coverage. The code coverage consists of `Feature`s.
-/// For example, a feature might be the identifier of a code block/edge,
-/// or the result of a comparison operation for a certain program counter.
+
+/// A FuzzerSensor for recording code coverage.
+/// Please only ever use the instance defined by `CodeCoverageSensor.shared`
 public final class CodeCoverageSensor: FuzzerSensor {
     static let shared: CodeCoverageSensor = .init()
     /// The maximum number of instrumented code edges allowed by CodeCoverageSensor.
@@ -54,7 +53,7 @@ public final class CodeCoverageSensor: FuzzerSensor {
     /// Handle a call to the sanitizer code coverage function `trace_pc_guard_init`
     /// It assigns a unique value to every pointer inside [start, stop). These values
     /// are the identifiers of the instrumented code edges.
-    /// Update `CodeCoverageSensor.numGuards` appropriately.
+    /// Reset and resize `edges` and `eightBitCounters`
     func handlePCGuardInit(start: UnsafeMutablePointer<UInt32>, stop: UnsafeMutablePointer<UInt32>) {
         guard start != stop && start.pointee == 0 else { return }
         
@@ -89,8 +88,8 @@ public final class CodeCoverageSensor: FuzzerSensor {
             handle(.edge(f))
         }
         
-        indirectFeatures.sort { ($0 < $1) }
-        cmpFeatures.sort { ($0 < $1) }
+        indirectFeatures.sort()
+        cmpFeatures.sort()
 
         // Ensure we don't call `handle` with the same argument twice.
         // This works because the arrays are sorted.

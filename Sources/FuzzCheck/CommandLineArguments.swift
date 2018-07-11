@@ -141,13 +141,6 @@ extension CommandLineFuzzerWorldInfo {
             usage: "The maximum number of seconds to run FuzzCheck before exiting",
             completion: nil
         )
-        let iterationTimeout = parser.add(
-            option: "--iteration-timeout",
-            shortName: "-itm",
-            kind: UInt.self,
-            usage: "The maximum number of milliseconds the test function is allowed to take to process a single input",
-            completion: nil
-        )
         let inputCorpora = parser.add(
             option: "--input-folders",
             shortName: "-in-f",
@@ -224,7 +217,6 @@ extension CommandLineFuzzerWorldInfo {
         settingsBinder.bind(option: maxNumberOfRuns) { $0.maxNumberOfRuns = Int($1) }
         settingsBinder.bind(option: maxComplexity) { $0.maxInputComplexity = $1 }
         settingsBinder.bind(option: mutationDepth) { $0.mutateDepth = Int($1) }
-        settingsBinder.bind(option: iterationTimeout) { $0.iterationTimeout = $1 }
         settingsBinder.bind(option: command) { $0.command = $1 }
         
         worldBinder.bind(option: inputCorpora) { $0.inputCorpora = $1 }
@@ -264,7 +256,6 @@ extension FuzzerSettings {
         var args: [String] = []
         args += ["--command", "\(command)"]
         args += ["--max-complexity", "\(maxInputComplexity)"]
-        args += ["--iteration-timeout", "\(iterationTimeout)"]
         args += ["--max-number-of-runs", "\(maxNumberOfRuns)"]
         args += ["--mutation-depth", "\(mutateDepth)"]
         return args

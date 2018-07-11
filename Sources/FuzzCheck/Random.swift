@@ -33,7 +33,7 @@ extension Rand {
 
 extension RandomNumberGenerator {
     
-    public mutating func weightedRandomElement <W: RandomAccessCollection> (cumulativeWeights: W, minimum: W.Element) -> W.Index where W.Element: RandomRangeInitializable {
+    public mutating func weightedRandomIndex <W: RandomAccessCollection> (cumulativeWeights: W, minimum: W.Element) -> W.Index where W.Element: RandomRangeInitializable {
 
         let randWeight = W.Element.random(in: minimum ..< cumulativeWeights.last!, using: &self)
         var index: W.Index = cumulativeWeights.startIndex

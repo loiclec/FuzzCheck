@@ -83,7 +83,7 @@ extension Array: ArgumentKind where Element == ArtifactSchema.Name.Component {
 extension ArtifactSchema.Content: ArgumentKind {
     public init(argument: String) throws {
         self.init(features: argument.contains("features"),
-                  coverageScore: argument.contains("coverage"),
+                  score: argument.contains("coverage"),
                   hash: argument.contains("hash"),
                   complexity: argument.contains("complexity"),
                   kind: argument.contains("kind"))
@@ -277,7 +277,7 @@ extension CommandLineFuzzerWorldInfo {
             if artifactsContentSchema.hash { contentSchema.append("hash") }
             if artifactsContentSchema.features { contentSchema.append("features") }
             if artifactsContentSchema.kind { contentSchema.append("kind") }
-            if artifactsContentSchema.coverageScore { contentSchema.append("coverage") }
+            if artifactsContentSchema.score { contentSchema.append("coverage") }
             if !contentSchema.isEmpty {
                 args += ["--artifact-content", contentSchema.joined(separator: ",")]
             }

@@ -34,7 +34,7 @@ public protocol FuzzerWorld {
     mutating func readInputCorpus() throws -> [Input]
     mutating func readInputFile() throws -> Input
     
-    mutating func saveArtifact(input: Input, features: [Feature]?, coverage: Double?, kind: ArtifactKind) throws
+    mutating func saveArtifact(input: Input, features: [Feature]?, score: Double?, kind: ArtifactKind) throws
     mutating func addToOutputCorpus(_ input: Input) throws
     mutating func removeFromOutputCorpus(_ input: Input) throws
     mutating func reportEvent(_ event: FuzzerEvent, stats: FuzzerStats)
@@ -79,7 +79,7 @@ public struct CommandLineFuzzerWorldInfo {
     public var outputCorpusNames: Set<String> = []
     public var artifactsFolder: Folder? = (try? Folder.current.subfolder(named: "artifacts")) ?? Folder.current
     public var artifactsNameSchema: ArtifactSchema.Name = ArtifactSchema.Name(components: [.kind, .literal("-"), .hash], ext: "json")
-    public var artifactsContentSchema: ArtifactSchema.Content = ArtifactSchema.Content(features: false, coverageScore: false, hash: false, complexity: false, kind: false)
+    public var artifactsContentSchema: ArtifactSchema.Content = ArtifactSchema.Content(features: false, score: false, hash: false, complexity: false, kind: false)
     public init() {}
 }
 
@@ -112,13 +112,13 @@ public struct CommandLineFuzzerWorld <Input, Properties> : FuzzerWorld
         return UInt(r.ru_maxrss) >> 20
     }
     
-    public func saveArtifact(input: Input, features: [Feature]?, coverage: Double?, kind: ArtifactKind) throws {
+    public func saveArtifact(input: Input, features: [Feature]?, score: Double?, kind: ArtifactKind) throws {
         guard let artifactsFolder = info.artifactsFolder else {
             return
         }
         let complexity = Properties.complexity(of: input)
         let hash = Properties.hash(of: input)
-        let content = Artifact.Content.init(schema: info.artifactsContentSchema, input: input, features: features, coverage: coverage, hash: hash, complexity: complexity, kind: kind)
+        let content = Artifact.Content.init(schema: info.artifactsContentSchema, input: input, features: features, score: score, hash: hash, complexity: complexity, kind: kind)
         let encoder = JSONEncoder()
         encoder.outputFormatting = .prettyPrinted
         let data = try encoder.encode(content)

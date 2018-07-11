@@ -18,7 +18,7 @@ import Foundation
  a filename "testFailure-3-fc3daa1056".
  
  Inside an artifact file, a user might wish to include the complexity
- of the test input and its coverage score, but not its hash, etc.
+ of the test input and its score, but not its hash, etc.
  */
 
 /**
@@ -34,11 +34,11 @@ public struct Artifact <Input: Codable> {
     public struct Content {
         /// The test input that the artifact file describes
         let input: Input
-        /// The code coverage features discovered by that test input.
+        /// The features discovered by that test input.
         let features: [CodeCoverageSensor.Feature]?
-        /// The code coverage score of the input, which can depend on the state
+        /// The score of the input, which can depend on the state
         /// of the fuzzer's input pool at the time the artifact was generated.
-        let coverageScore: Double?
+        let score: Double?
         let hash: Int?
         let complexity: Double?
         let kind: ArtifactKind?
@@ -87,14 +87,14 @@ public struct ArtifactSchema {
     */
     public struct Content {
         public let features: Bool
-        public let coverageScore: Bool
+        public let score: Bool
         public let hash: Bool
         public let complexity: Bool
         public let kind: Bool
     
-        public init(features: Bool, coverageScore: Bool, hash: Bool, complexity: Bool, kind: Bool) {
+        public init(features: Bool, score: Bool, hash: Bool, complexity: Bool, kind: Bool) {
            self.features = features
-           self.coverageScore = coverageScore
+           self.score = score
            self.hash = hash
            self.complexity = complexity
            self.kind = kind
@@ -103,10 +103,10 @@ public struct ArtifactSchema {
 }
 
 extension Artifact.Content {
-    init(schema: ArtifactSchema.Content, input: Input, features: [CodeCoverageSensor.Feature]?, coverage: Double?, hash: Int?, complexity: Double?, kind: ArtifactKind) {
+    init(schema: ArtifactSchema.Content, input: Input, features: [CodeCoverageSensor.Feature]?, score: Double?, hash: Int?, complexity: Double?, kind: ArtifactKind) {
         self.input = input
         self.features = schema.features ? features : nil
-        self.coverageScore = schema.coverageScore ? coverage : nil
+        self.score = schema.score ? score : nil
         self.hash = schema.hash ? hash : nil
         self.complexity = schema.complexity ? complexity : nil
         self.kind = schema.kind ? kind : nil
@@ -265,19 +265,19 @@ extension Artifact.Content: Codable {
         case input
         case complexity
         case hash
-        case coverage
+        case score
         case features
         case kind
     }
     
     public func encode(to encoder: Encoder) throws {
-        if self.complexity == nil, self.coverageScore == nil, self.hash == nil, self.kind == nil, self.features == nil {
+        if self.complexity == nil, self.score == nil, self.hash == nil, self.kind == nil, self.features == nil {
             try input.encode(to: encoder)
         } else {
             var container = encoder.container(keyedBy: CodingKey.self)
             try container.encode(input, forKey: .input)
             try container.encodeIfPresent(complexity, forKey: .complexity)
-            try container.encodeIfPresent(coverageScore, forKey: .coverage)
+            try container.encodeIfPresent(score, forKey: .score)
             try container.encodeIfPresent(hash, forKey: .hash)
             try container.encodeIfPresent(kind, forKey: .kind)
             try container.encodeIfPresent(features, forKey: .features)
@@ -287,7 +287,7 @@ extension Artifact.Content: Codable {
         if let input = try? Input(from: decoder) {
             self.input = input
             self.complexity = nil
-            self.coverageScore = nil
+            self.score = nil
             self.hash = nil
             self.features = nil
             self.kind = nil
@@ -295,7 +295,7 @@ extension Artifact.Content: Codable {
             let container = try decoder.container(keyedBy: CodingKey.self)
             self.input = try container.decode(Input.self, forKey: .input)
             self.complexity = try container.decodeIfPresent(Double.self, forKey: .complexity)
-            self.coverageScore = try container.decodeIfPresent(Double.self, forKey: .coverage)
+            self.score = try container.decodeIfPresent(Double.self, forKey: .score)
             self.hash = try container.decodeIfPresent(Int.self, forKey: .hash)
             self.features = try container.decodeIfPresent(Array<CodeCoverageSensor.Feature>.self, forKey: .features)
             self.kind = try container.decodeIfPresent(ArtifactKind.self, forKey: .kind)

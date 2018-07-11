@@ -13,18 +13,18 @@ extension FuzzerState {
     
     /**
      A `InputPool` is a collection of test inputs along with some of their
-     code coverage analysis results.
+     analysis results.
      
      Each input in the `InputPool` is given a weight based on multiple factors
-     (e.g. its code coverage features and its complexity). This weight
-     determines the probability of being selected by the `randomIndex` method.
+     (e.g. its features and its complexity). This weight determines the
+     probability of being selected by the `randomIndex` method.
      
      The pool can also contain a “favored” input, which cannot be deleted and has
      a consistently high probability of being selected by `randomIndex`.
      
      Finally, the pool keeps track of the complexity of the simplest input that
-     triggered each code coverage feature. It is used to filter out uninteresting
-     inputs and to compute the code coverage score of each input.
+     triggered each feature. It is used to filter out uninteresting inputs and
+     to compute the score of each input.
      
      an inputPool can also have an alternate representation maintained by the
      Fuzzer’s world. For example, we could mirror the content of the pool in a
@@ -35,18 +35,18 @@ extension FuzzerState {
     final class InputPool {
         
         /**
-         Represents an input in the pool along with its initial code coverage analysis
-         and its code coverage score in the input pool.
+         Represents an input in the pool along with its initial analysis and
+         its score in the input pool.
          */
         struct Element {
             let input: Input
             /// The complexity of the input
             let complexity: Double
-            /// The code coverage features triggered by feeding the input to the test function
+            /// The features triggered by feeding the input to the test function
             let features: [Sensor.Feature]
             
             /**
-             The relative coverage score of the input in the pool.
+             The relative score of the input in the pool.
              
              It depends on the other properties of InputPool.Element and the global
              state of the pool.
@@ -54,7 +54,7 @@ extension FuzzerState {
              It is not always set at initialization time and is not updated automatically
              after changes to the pool, so it should be kept in sync manually.
              */
-            var coverageScore: Double
+            var score: Double
             
             // Is only used because `collection.removeAt(indices:)` is not
             // implemented in the stdlib and it's not worth reimplementing here
@@ -64,7 +64,7 @@ extension FuzzerState {
                 self.input = input
                 self.complexity = complexity
                 self.features = features
-                self.coverageScore = -1 // uninitialized
+                self.score = -1 // uninitialized
                 self.flaggedForDeletion = false
             }
         }
@@ -84,14 +84,14 @@ extension FuzzerState {
         var cumulativeWeights: [Double] = []
         
         /**
-         The global coverage score of all inputs in the pool. It should always be equal
-         to the sum of each input’s coverage score.
+         The global score of all inputs in the pool. It should always be equal
+         to the sum of each input’s score.
         */
-        var coverageScore: Double = 0
+        var score: Double = 0
         
         /**
          A dictionary that keeps track of the complexity of the simplest input that
-         triggered each code coverage feature.
+         triggered each feature.
          
          Every feature that has ever been recorded by the fuzzer should be in this dictionary.
         */
@@ -127,7 +127,7 @@ extension FuzzerState.InputPool {
 extension FuzzerState.InputPool {
     
     /**
-     Add the input to the input pool. Update the coverage score and weight of each input
+     Add the input to the input pool. Update the score and weight of each input
      accordingly. This might result in other inputs being removed from the pool.
      
      - Complexity: Proportional to the sum of `inputs[i].features.count` for each `i` in
@@ -144,7 +144,7 @@ extension FuzzerState.InputPool {
         }
         inputs.append(inputInfo)
         let worldUpdate1 = updateCoverageScores()
-        cumulativeWeights = inputs.scan(0.0) { $0 + $1.coverageScore }
+        cumulativeWeights = inputs.scan(0.0) { $0 + $1.score }
 
         return { w in
             try worldUpdate1(&w)
@@ -156,97 +156,132 @@ extension FuzzerState.InputPool {
 extension FuzzerState.InputPool {
     
     /**
-     Update the coverage score of every input in the pool
+     Update the score of every input in the pool
      - Complexity: Proportional to the sum of `inputs[i].features.count` for each `i` in
        `inputs.indices` (i.e. expensive)
      */
     func updateCoverageScores() -> (inout World) throws -> Void {
         /*
-         NOTE: the logic for computing the coverage scores will probably change, but here
+         NOTE: the logic for computing the scores will probably change, but here
          is an explanation of the current behavior.
          
-         The main ideaa are:
-         1. Each feature has a coverage score that is split among all inputs containing
+         The main ideas are:
+         1. Each feature has a score that is split among all inputs containing
          that feature. Because simpler inputs are considered better, they receive a
          larger share of the feature score.
-         2. an input's coverage score is the sum of the coverage scores associated with
+         2. an input's score is the sum of the scores associated with
          each of its features
          
          Example:
          The pool contains three inputs: u1, u2, u3, which have triggered these features:
          - u1: f1 f2 f3
          - u2:    f2 f3
-         - u3: f1 f2    f4
+         - u3:    f2    f4
          To keep it simple, let's assume that all features (f1, f2, f3. f4) have the same
-         score of 2.
+         score of 1.
          Finally, we need to know the inputs' complexities:
          - u1: 10.0
          - u2: 5.0
          - u3: 5.0
+         The final scores of the inputs will be:
+         - u1: 1.31
+         - u2: 1.24
+         - u3: 1.44
          
-         The coverage scores of the inputs are:
-         - 
+         Let's first split the score of the feature f2 between u1, u2, and u3.
          
-         Let's first split the coverage score of the feature f2 between u1, u2, and u3.
-         
-         (Notation: the share of an input `u`'s coverage score given by a feature `fy`
+         (Notation: the share of an input `u`'s score given by a feature `fy`
          is written `u.fy_score`)
          
          We need to satisfy these conditions:
          1. u1.f2_score + u2.f2_score + u3.f2_score == f2.score (== 2)
          2. u1.f2_score < u3.f2_score (because u3 is a simpler, better input than u1)
          3. u2.f2_score == u3.f2_score (because u2 and u3 have the same complexity)
+         4. u3.f2_score == u3.f2_score (obviously)
          
          There are many possible solutions to this system of equation, so we need to choose
          a specific ratio between u1.f1_score and u3.f1_score. I chose to use the squared ratio
-         of u1 and u3
-        */
+         of the complexities of u1 and u3 (why? because I had to choose something and lack the
+         empirical evidence needed to make an informed choice).
+         So the equations are, more specifically:
+         1. u1.f2_score + u2.f2_score + u3.f2_score == f2.score (== 1)
+         2. u1.f2_score = (u3.complexity / u1.complexity)^2 * u3.f2_score
+         3. u2.f2_score = (u3.complexity / u2.complexity)^2 * u3.f2_score
+         4. u3.f2_score = (u3.complexity / u3.complexity)^2 * u3.f2_score
+         
+         We replace the terms in (1) with (2) and (3), abbreviating (u3.complexity / ux.complexity)^2 by ratio(ux)
+         1. ratio(u1) * u3.f2_score + ratio(u2) * u3.f2_score + ratio(u3) * u3.f2_score = f2.score
+        
+         which can be simplified to:
+         1. (ratio(u1) + ratio(u2) + ratio(u3)) * u3.f2_score = f2.score
+         => u3.f2_score = f2.score / (ratio(u1) + ratio(u2) + ratio(u3))     [ref: #LHBasKGXc]
+         which allows us to compute an unknown of the equation, finally!
+         => u3.f2_score = 1.0 / (0.25 + 1.0 + 1.0) = 0.44
+
+         the remaining scores can now be computed:
+         2. u1.f2_score = ratio(u1) * u3.f2_score = (5.0 / 10.0)^2 * 0.44 = 0.11
+         3. u2.f2_score = ratio(u2) * u3.f2_score = (5.0 / 5.0)^2 * 0.44 = 0.44
+        
+         It all checks out:
+         1. u1.f2_score + u2.f2_score + u3.f2_score == 0.11 + 0.44 + 0.44 = 1.0 = f2.score
+         
+         Repeat this procedure with the other features to find the total score of each unit.
+         
+         So, in order to compute the score of each unit, we need to sum the complexity ratio between
+         a particular unit and all other units (see: #LHBasKGXc). We decide that this “particular unit”
+         is the simplest unit containing the feature (as we already keep track of its complexity in
+         `smallestInputComplexityForFeature`).
+         
+         This is what the code below does!
+         
+         Except not really! There is an exception.
+         
+         If an input is not the simplest one to contain any particular feature, we delete it from
+         the pool, to avoid pool bloat. Maybe in the future we should use inputs' scores to decide
+         whether to delete them from the pool, but that would be more complicated.
+         */
+        
         func complexityRatio(simplest: Double, other: Double) -> Double {
             // the square of the ratio of complexities
             return { $0 * $0 }(simplest / other)
         }
         
-        coverageScore = 0
-        var sumComplexityRatios: [Sensor.Feature: Double] = [:]
-        for (u, idx) in zip(inputs, inputs.indices) {
+        // I am sure this could be much faster.
+
+        // First iterate over all inputs and features to initialize sumComplexityRatios
+        var sumComplexityRatios: [Sensor.Feature: Double] = [:] // see: #LHBasKGXc
+        for (input, idx) in zip(inputs, inputs.indices) {
             inputs[idx].flaggedForDeletion = true
-            inputs[idx].coverageScore = 0
-            // the score is:
-            // The weighted sum of the scores of this inputs' features.
-            // The weight is given by this set of equations:
-            // 1) for feature f1, the sum of the f1-score of each input is equal to f1.score
-            // 2) given uf (the minimal input for f1) and u2, the f1-score of u2 is equal to uf.c/u2.c * uf.f1-score
-            //      that is: more complex inputs get fewer points per feature
-            //    e.g. given: uf.c=1 ; u2.c=10 ; f1.score = 22
-            //         we find: uf.f1-score = 20 ; u2.f1-score = 2
-            //         f1.score = 22 = uf.f1-score + u2.f1-score
-            //         u2.f1-score = uf.c/u2.c * uf.f1-score = 1/10 * 20 = 2
-            for f in u.features {
+            inputs[idx].score = 0
+            for f in input.features {
                 let simplestComplexity = smallestInputComplexityForFeature[f]!
-                let ratio = complexityRatio(simplest: simplestComplexity, other: u.complexity)
+                let ratio = complexityRatio(simplest: simplestComplexity, other: input.complexity)
                 precondition(ratio <= 1)
                 if ratio == 1 { inputs[idx].flaggedForDeletion = false }
             }
             guard inputs[idx].flaggedForDeletion == false else {
                 continue
             }
-            for f in u.features {
+            for f in input.features {
                 let simplestComplexity = smallestInputComplexityForFeature[f]!
-                let ratio = complexityRatio(simplest: simplestComplexity, other: u.complexity)
+                let ratio = complexityRatio(simplest: simplestComplexity, other: input.complexity)
                 sumComplexityRatios[f, default: 0.0] += ratio
             }
         }
-        for (u, idx) in zip(inputs, inputs.indices) where u.flaggedForDeletion == false {
-            for f in u.features {
+        
+        // Then use sumComplexityRatios to find the score of each feature for each unit and sum all the things
+        for (input, idx) in zip(inputs, inputs.indices) where input.flaggedForDeletion == false {
+            for f in input.features {
                 let simplestComplexity = smallestInputComplexityForFeature[f]!
                 let sumRatios = sumComplexityRatios[f]!
                 let baseScore = f.score / sumRatios
-                let ratio = complexityRatio(simplest: simplestComplexity, other: u.complexity)
+                let ratio = complexityRatio(simplest: simplestComplexity, other: input.complexity)
                 let score = baseScore * ratio
-                inputs[idx].coverageScore += score
-                coverageScore += score
+                inputs[idx].score += score
             }
         }
+        
+        // remove inputs that don't deserve to be in the pool anymore
         let inputsToDelete = inputs.filter { $0.flaggedForDeletion }.map { $0.input }
         let worldUpdate: (inout World) throws -> Void = { [inputsToDelete] w in
             for u in inputsToDelete {
@@ -256,19 +291,23 @@ extension FuzzerState.InputPool {
                 print("DELETE \(inputsToDelete.count)")
             }
         }
-        
+
         inputs.removeAll { $0.flaggedForDeletion }
+
+        score = inputs.reduce(0) { $0 + $1.score }
+        
         return worldUpdate
     }
     
     
     func randomIndex(_ r: inout Rand) -> InputPoolIndex {
+        // maybe the odd of choosing the favoredInput should decrease as time goes on
         if favoredInput != nil, r.bool(odds: 0.25) {
             return .favored
         } else if inputs.isEmpty {
             return .favored
         } else {
-            let x = r.weightedRandomElement(cumulativeWeights: cumulativeWeights, minimum: 0)
+            let x = r.weightedRandomIndex(cumulativeWeights: cumulativeWeights, minimum: 0)
             return .normal(x)
         }
     }

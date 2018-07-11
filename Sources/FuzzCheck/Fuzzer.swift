@@ -61,7 +61,7 @@ public final class FuzzerState <Input, Properties, World, Sensor>
         let seconds = Double(now - processStartTime) / 1_000_000
         stats.executionsPerSecond = Int((Double(stats.totalNumberOfRuns) / seconds).rounded())
         stats.poolSize = pool.inputs.count
-        stats.score = pool.coverageScore.rounded()
+        stats.score = pool.score.rounded()
         stats.rss = Int(world.getPeakMemoryUsage())
     }
     
@@ -72,7 +72,7 @@ public final class FuzzerState <Input, Properties, World, Sensor>
         case .illegalInstruction, .abort, .busError, .floatingPointException:
             var features: [Sensor.Feature] = []
             sensor.iterateOverCollectedFeatures { features.append($0) }
-            try! world.saveArtifact(input: input, features: features, coverage: pool.coverageScore, kind: .crash)
+            try! world.saveArtifact(input: input, features: features, score: pool.score, kind: .crash)
             exit(FuzzerTerminationStatus.crash.rawValue)
             
         case .interrupt:
@@ -190,7 +190,7 @@ extension Fuzzer {
             state.world.reportEvent(.testFailure, stats: state.stats)
             var features: [Sensor.Feature] = []
             state.sensor.iterateOverCollectedFeatures { features.append($0) }
-            try! state.world.saveArtifact(input: state.input, features: features, coverage: state.pool.coverageScore, kind: .testFailure)
+            try! state.world.saveArtifact(input: state.input, features: features, score: state.pool.score, kind: .testFailure)
             exit(FuzzerTerminationStatus.testFailure.rawValue)
         }
 

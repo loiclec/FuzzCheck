@@ -84,7 +84,7 @@ struct MockWorld <P: FuzzerInputProperties>: FuzzerWorld {
         fatalError()
     }
     
-    mutating func saveArtifact(input: P.Input, features: [Feature]?, coverage: Double?, kind: ArtifactKind) throws {
+    mutating func saveArtifact(input: P.Input, features: [Feature]?, score: Double?, kind: ArtifactKind) throws {
         return
     }
     

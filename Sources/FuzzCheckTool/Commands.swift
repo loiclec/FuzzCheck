@@ -48,7 +48,7 @@ func minimizeCommand(settings: FuzzerManagerSettings, workerSettings: FuzzerSett
     
     world.artifactsFolder = artifactsFolder
     // we store the complexity in the artifacts file so that we can determine which artifact is the simplest one.
-    world.artifactsContentSchema = .init(features: false, coverageScore: false, hash: false, complexity: true, kind: false)
+    world.artifactsContentSchema = .init(features: false, score: false, hash: false, complexity: true, kind: false)
     // the complexity in the artifact files is stored under the key “complexity”
     // we create this simple wrapper type to decode it
     /** e.g.

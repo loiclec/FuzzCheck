@@ -39,8 +39,6 @@ public protocol FuzzerWorld {
     mutating func removeFromOutputCorpus(_ input: Input) throws
     mutating func reportEvent(_ event: FuzzerEvent, stats: FuzzerStats)
     
-    mutating func readInputCorpusWithFeatures() throws -> [(Input, [Feature])]
-    
     var rand: Rand { get set }
 }
 
@@ -81,9 +79,9 @@ public struct CommandLineFuzzerWorldInfo {
     public var inputCorpora: [Folder] = []
     public var outputCorpus: Folder? = nil
     public var outputCorpusNames: Set<String> = []
-    public var artifactsFolder: Folder? = Folder.current
-    public var artifactsNameSchema: ArtifactSchema.Name = ArtifactSchema.Name(components: [.hash], ext: nil)
-    public var artifactsContentSchema: ArtifactSchema.Content = ArtifactSchema.Content(features: true, coverageScore: true, hash: false, complexity: false, kind: false)
+    public var artifactsFolder: Folder? = (try? Folder.current.subfolder(named: "artifacts")) ?? Folder.current
+    public var artifactsNameSchema: ArtifactSchema.Name = ArtifactSchema.Name(components: [.kind, .literal("-"), .hash], ext: "json")
+    public var artifactsContentSchema: ArtifactSchema.Content = ArtifactSchema.Content(features: false, coverageScore: false, hash: false, complexity: false, kind: false)
     public init() {}
 }
 
@@ -151,25 +149,6 @@ public struct CommandLineFuzzerWorld <Input, Properties> : FuzzerWorld
         return try info.inputCorpora
             .flatMap { $0.files }
             .map { try decoder.decode(Artifact<Input>.Content.self, from: $0.read()).input }
-    }
-    
-    public mutating func readInputCorpusWithFeatures() throws -> [(Input, [Feature])] {
-        let decoder = JSONDecoder()
-
-        let artifacts = info.inputCorpora
-            .flatMap { $0.files }
-            .map { file -> Artifact<Input>.Content in
-                do {
-                    return try decoder.decode(Artifact<Input>.Content.self, from: file.read())
-                } catch let e {
-                    print(e)
-                    sleep(4)
-                    fatalError()
-                }
-            }
-        return artifacts.map { c in
-            (c.input, c.features!)
-        }
     }
     
     public func removeFromOutputCorpus(_ input: Input) throws {

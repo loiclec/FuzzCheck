@@ -1,3 +1,7 @@
+//
+//  FuzzerInputGenerator.swift
+//  FuzzCheck
+//
 
 /// A protocol defining how to generate and mutate values of type Input.
 public protocol FuzzerInputGenerator {
@@ -13,7 +17,7 @@ public protocol FuzzerInputGenerator {
      - the empty array
      - the number 0
      - an arbitrary value if `Input` doesn't have a “simplest” value
-    */
+     */
     var baseInput: Input { get }
     
     /**
@@ -29,7 +33,7 @@ public protocol FuzzerInputGenerator {
      but it can help it start working on the right foot.
      
      - Parameter rand: a random number generator
-    */
+     */
     func initialInputs(_ rand: inout Rand) -> [Input]
     
     /**
@@ -58,32 +62,13 @@ public protocol FuzzerInputGenerator {
      - Parameter input: the input to mutate
      - Parameter rand: a random number generator
      - Returns: true iff the input was actually mutated
-    */
+     */
     func mutate(_ input: inout Input, _ rand: inout Rand) -> Bool
 }
 
-/// A protocol giving some information about values of type Input, such as its complexity or hash.
-public protocol FuzzerInputProperties {
-    associatedtype Input
-    /**
-     Returns the complexity of the given input.
-     
-     FuzzCheck will prefer using inputs with a smaller complexity.
-     
-     - Important: The return value must be >= 0
-     
-     ## Examples
-     - an array might have a complexity equal to the sum of complexities of its elements
-     - an integer might have a complexity equal to the number of bytes used to represent it
-     */
-    static func complexity(of input: Input) -> Double
-    
-    /// - Returns: the hash value of the given input
-    static func hash(of input: Input) -> Int
-}
-
 /**
- A type providing a list of weighted mutators.
+ A type providing a list of weighted mutators, which is handy to implement
+ the `mutate` method of a `FuzzerInputGenerator`.
  
  The weight of a mutator determines how often it should be used relative to
  the other mutators in the list.
@@ -91,7 +76,7 @@ public protocol FuzzerInputProperties {
 public protocol FuzzerInputMutatorGroup {
     associatedtype Input
     associatedtype Mutator
-
+    
     /**
      Mutate the given input using the given mutator and random number generator.
      
@@ -99,7 +84,7 @@ public protocol FuzzerInputMutatorGroup {
      - Parameter mutator: the mutator to use to mutate the input
      - Parameter rand: a random number generator
      - Returns: true iff the input was actually mutated
-    */
+     */
     func mutate(_ input: inout Input, with mutator: Mutator, _ rand: inout Rand) -> Bool
     
     /**
@@ -110,7 +95,7 @@ public protocol FuzzerInputMutatorGroup {
      and the weight of the mutator itself. For example, for three mutators `(m1, m2, m3)`
      with relative weights `(120, 5, 56)`. Then `weightedMutators` should return
      `[(m1, 120), (m2, 125), (m3, 181)]`.
-    */
+     */
     var weightedMutators: [(Mutator, UInt)] { get }
 }
 
@@ -131,3 +116,4 @@ extension FuzzerInputMutatorGroup {
         return false
     }
 }
+

@@ -95,7 +95,7 @@ extension FuzzerState {
          
          Every feature that has ever been recorded by the fuzzer should be in this dictionary.
         */
-        var smallestUnitComplexityForFeature: [Sensor.Feature.Reduced: Double] = [:]
+        var smallestUnitComplexityForFeature: [Sensor.Feature: Double] = [:]
     }
 }
 
@@ -137,11 +137,9 @@ extension FuzzerState.UnitPool {
     func add(_ unitInfo: UnitInfo) -> (inout World) throws -> Void {
 
         for f in unitInfo.features {
-            let reduced = f.reduced
-            
-            let complexity = smallestUnitComplexityForFeature[reduced]
+            let complexity = smallestUnitComplexityForFeature[f]
             if complexity == nil || unitInfo.complexity < complexity! {
-                smallestUnitComplexityForFeature[reduced] = unitInfo.complexity
+                smallestUnitComplexityForFeature[f] = unitInfo.complexity
             }
         }
         units.append(unitInfo)
@@ -209,7 +207,7 @@ extension FuzzerState.UnitPool {
         }
         
         coverageScore = 0
-        var sumComplexityRatios: [Sensor.Feature.Reduced: Double] = [:]
+        var sumComplexityRatios: [Sensor.Feature: Double] = [:]
         for (u, idx) in zip(units, units.indices) {
             units[idx].flaggedForDeletion = true
             units[idx].coverageScore = 0
@@ -224,7 +222,7 @@ extension FuzzerState.UnitPool {
             //         f1.score = 22 = uf.f1-score + u2.f1-score
             //         u2.f1-score = uf.c/u2.c * uf.f1-score = 1/10 * 20 = 2
             for f in u.features {
-                let simplestComplexity = smallestUnitComplexityForFeature[f.reduced]!
+                let simplestComplexity = smallestUnitComplexityForFeature[f]!
                 let ratio = complexityRatio(simplest: simplestComplexity, other: u.complexity)
                 precondition(ratio <= 1)
                 if ratio == 1 { units[idx].flaggedForDeletion = false }
@@ -233,15 +231,15 @@ extension FuzzerState.UnitPool {
                 continue
             }
             for f in u.features {
-                let simplestComplexity = smallestUnitComplexityForFeature[f.reduced]!
+                let simplestComplexity = smallestUnitComplexityForFeature[f]!
                 let ratio = complexityRatio(simplest: simplestComplexity, other: u.complexity)
-                sumComplexityRatios[f.reduced, default: 0.0] += ratio
+                sumComplexityRatios[f, default: 0.0] += ratio
             }
         }
         for (u, idx) in zip(units, units.indices) where u.flaggedForDeletion == false {
             for f in u.features {
-                let simplestComplexity = smallestUnitComplexityForFeature[f.reduced]!
-                let sumRatios = sumComplexityRatios[f.reduced]!
+                let simplestComplexity = smallestUnitComplexityForFeature[f]!
+                let sumRatios = sumComplexityRatios[f]!
                 let baseScore = f.score / sumRatios
                 let ratio = complexityRatio(simplest: simplestComplexity, other: u.complexity)
                 let score = baseScore * ratio
@@ -274,7 +272,7 @@ extension FuzzerState.UnitPool {
         }
         
         coverageScore = 0
-        var sumComplexityRatios: [Sensor.Feature.Reduced: Double] = [:]
+        var sumComplexityRatios: [Sensor.Feature: Double] = [:]
         for (u, idx) in zip(units, units.indices) {
             units[idx].flaggedForDeletion = true
             units[idx].coverageScore = 0
@@ -289,7 +287,7 @@ extension FuzzerState.UnitPool {
             //         f1.score = 22 = uf.f1-score + u2.f1-score
             //         u2.f1-score = uf.c/u2.c * uf.f1-score = 1/10 * 20 = 2
             for f in u.features {
-                let simplestComplexity = smallestUnitComplexityForFeature[f.reduced]!
+                let simplestComplexity = smallestUnitComplexityForFeature[f]!
                 let ratio = complexityRatio(simplest: simplestComplexity, other: u.complexity)
                 precondition(ratio <= 1)
                 if ratio == 1 { units[idx].flaggedForDeletion = false }
@@ -298,15 +296,15 @@ extension FuzzerState.UnitPool {
                 continue
             }
             for f in u.features {
-                let simplestComplexity = smallestUnitComplexityForFeature[f.reduced]!
+                let simplestComplexity = smallestUnitComplexityForFeature[f]!
                 let ratio = complexityRatio(simplest: simplestComplexity, other: u.complexity)
-                sumComplexityRatios[f.reduced, default: 0.0] += ratio
+                sumComplexityRatios[f, default: 0.0] += ratio
             }
         }
         for (u, idx) in zip(units, units.indices) where u.flaggedForDeletion == false {
             for f in u.features {
-                let simplestComplexity = smallestUnitComplexityForFeature[f.reduced]!
-                let sumRatios = sumComplexityRatios[f.reduced]!
+                let simplestComplexity = smallestUnitComplexityForFeature[f]!
+                let sumRatios = sumComplexityRatios[f]!
                 let baseScore = f.score / sumRatios
                 let ratio = complexityRatio(simplest: simplestComplexity, other: u.complexity)
                 let score = baseScore * ratio

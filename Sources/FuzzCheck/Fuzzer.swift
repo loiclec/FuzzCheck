@@ -37,9 +37,8 @@ public final class FuzzerState <Unit, Properties, World, Sensor>
     var settings: FuzzerSettings
     /// The time at which the fuzzer started. Used for computing the average execution speed.
     var processStartTime: UInt = 0
-    // TODO
+    /// 
     var sensor: Sensor
-    
     /**
      A property managing the effects and coeffects produced and needed by the fuzzer.
     
@@ -72,7 +71,7 @@ public final class FuzzerState <Unit, Properties, World, Sensor>
         switch signal {
         case .illegalInstruction, .abort, .busError, .floatingPointException:
             var features: [Sensor.Feature] = []
-            sensor.collectFeatures { features.append($0) }
+            sensor.iterateOverCollectedFeatures { features.append($0) }
             try! world.saveArtifact(unit: unit, features: features, coverage: pool.coverageScore, kind: .crash)
             exit(FuzzerTerminationStatus.crash.rawValue)
             
@@ -189,7 +188,7 @@ extension Fuzzer {
         guard success else {
             state.world.reportEvent(.testFailure, stats: state.stats)
             var features: [Sensor.Feature] = []
-            state.sensor.collectFeatures { features.append($0) }
+            state.sensor.iterateOverCollectedFeatures { features.append($0) }
             try! state.world.saveArtifact(unit: state.unit, features: features, coverage: state.pool.coverageScore, kind: .testFailure)
             exit(FuzzerTerminationStatus.testFailure.rawValue)
         }
@@ -203,13 +202,16 @@ extension Fuzzer {
      the current unit is interesting and should be added to the unit pool.
     */
     func analyze() -> State.UnitPool.UnitInfo? {
-        let currentUnitComplexity = Properties.complexity(of: state.unit)
         
+        // it is slow to recreate the array here each time
+        // move them to FuzzerState to improve performance a bit
         var bestUnitForFeatures: [Sensor.Feature] = []
         var otherFeatures: [Sensor.Feature] = []
+
+        let currentUnitComplexity = Properties.complexity(of: state.unit)
         
-        state.sensor.collectFeatures { feature in
-            guard let oldComplexity = state.pool.smallestUnitComplexityForFeature[feature.reduced] else {
+        state.sensor.iterateOverCollectedFeatures { feature in
+            guard let oldComplexity = state.pool.smallestUnitComplexityForFeature[feature] else {
                 bestUnitForFeatures.append(feature)
                 return
             }
@@ -241,13 +243,13 @@ extension Fuzzer {
         testCurrentUnit()
         
         let result = analyze()
-        state.updateStats()
         guard let newUnitInfo = result else {
             return
         }
         let effect = state.pool.add(newUnitInfo)
         try effect(&state.world)
-
+        
+        state.updateStats()
         state.world.reportEvent(.new, stats: state.stats)
     }
     

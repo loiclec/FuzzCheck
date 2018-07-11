@@ -6,28 +6,10 @@
 //
 
 extension CodeCoverageSensor {
-
     public enum Feature: FuzzerSensorFeature, Equatable, Hashable {
         case indirect(Indirect)
         case edge(Edge)
         case comparison(Comparison)
-
-        public enum Reduced: Equatable, Hashable {
-            case indirect(Indirect.Reduced)
-            case edge(Edge.Reduced)
-            case comparison(Comparison.Reduced)
-        }
-        
-        public var reduced: Reduced {
-            switch self {
-            case .indirect(let x):
-                return .indirect(x.reduced)
-            case .edge(let x):
-                return .edge(x.reduced)
-            case .comparison(let x):
-                return .comparison(x.reduced)
-            }
-        }
     }
 }
 
@@ -59,47 +41,30 @@ extension CodeCoverageSensor.Feature {
     public struct Indirect: Equatable, Hashable {
         let caller: UInt
         let callee: UInt
-    
-        public typealias Reduced = Indirect
-        var reduced: Reduced { return self }
     }
     public struct Edge: Equatable, Hashable {
         let pcguard: UInt
-        let counter: UInt16
+        let intensity: UInt8
         
-        init(pcguard: UInt, counter: UInt16) {
+        init(pcguard: UInt, intensity: UInt8) {
             self.pcguard = pcguard
-            self.counter = counter
+            self.intensity = intensity
         }
-        
-        public struct Reduced: Equatable, Hashable {
-            let pcguard: UInt
-            let intensity: UInt8
-        }
-        
-        var reduced: Reduced {
-            return Reduced(pcguard: pcguard, intensity: scoreFromCounter(counter))
+        init(pcguard: UInt, counter: UInt16) {
+            self.init(pcguard: pcguard, intensity: scoreFromCounter(counter))
         }
     }
     
     public struct Comparison: Equatable, Hashable {
         let pc: UInt
-        let arg1: UInt64
-        let arg2: UInt64
+        let argxordist: UInt8
         
-        init(pc: UInt, arg1: UInt64, arg2: UInt64) {
+        init(pc: UInt, argxordist: UInt8) {
             self.pc = pc
-            self.arg1 = arg1
-            self.arg2 = arg2
+            self.argxordist = argxordist
         }
-        
-        public struct Reduced: Equatable, Hashable {
-            let pc: UInt
-            let argxordist: UInt8
-        }
-        
-        var reduced: Reduced {
-            return Reduced(pc: pc, argxordist: scoreFromCounter(UInt8((arg1 &- arg2).nonzeroBitCount)))
+        init(pc: UInt, arg1: UInt64, arg2: UInt64) {
+            self.init(pc: pc, argxordist: scoreFromCounter(UInt8((arg1 &- arg2).nonzeroBitCount)))
         }
     }
 }
@@ -110,8 +75,8 @@ extension CodeCoverageSensor.Feature.Indirect: Comparable {
     }
 }
 
-extension CodeCoverageSensor.Feature.Comparison.Reduced: Comparable {
-    public static func < (lhs: CodeCoverageSensor.Feature.Comparison.Reduced, rhs: CodeCoverageSensor.Feature.Comparison.Reduced) -> Bool {
+extension CodeCoverageSensor.Feature.Comparison: Comparable {
+    public static func < (lhs: CodeCoverageSensor.Feature.Comparison, rhs: CodeCoverageSensor.Feature.Comparison) -> Bool {
         return (lhs.pc, lhs.argxordist) < (rhs.pc, rhs.argxordist)
     }
 }
@@ -127,9 +92,8 @@ extension CodeCoverageSensor.Feature: Codable {
         case kind
         case pc
         case pcguard
-        case counter
-        case arg1
-        case arg2
+        case intensity
+        case argxordist
         case caller
         case callee
     }
@@ -144,13 +108,12 @@ extension CodeCoverageSensor.Feature: Codable {
             self = .indirect(.init(caller: caller, callee: callee))
         case .edge:
             let pcguard = try container.decode(UInt.self, forKey: .pcguard)
-            let counter = try container.decode(UInt16.self, forKey: .counter)
-            self = .edge(.init(pcguard: pcguard, counter: counter))
+            let intensity = try container.decode(UInt8.self, forKey: .intensity)
+            self = .edge(.init(pcguard: pcguard, intensity: intensity))
         case .comparison:
             let pc = try container.decode(UInt.self, forKey: .pc)
-            let arg1 = try container.decode(UInt64.self, forKey: .arg1)
-            let arg2 = try container.decode(UInt64.self, forKey: .arg2)
-            self = .comparison(.init(pc: pc, arg1: arg1, arg2: arg2))
+            let argxordist = try container.decode(UInt8.self, forKey: .argxordist)
+            self = .comparison(.init(pc: pc, argxordist: argxordist))
         }
     }
     public func encode(to encoder: Encoder) throws {
@@ -163,12 +126,11 @@ extension CodeCoverageSensor.Feature: Codable {
         case .edge(let x):
             try container.encode(Kind.edge, forKey: .kind)
             try container.encode(x.pcguard, forKey: .pcguard)
-            try container.encode(x.counter, forKey: .counter)
+            try container.encode(x.intensity, forKey: .intensity)
         case .comparison(let x):
             try container.encode(Kind.comparison, forKey: .kind)
             try container.encode(x.pc, forKey: .pc)
-            try container.encode(x.arg1, forKey: .arg1)
-            try container.encode(x.arg2, forKey: .arg2)
+            try container.encode(x.argxordist, forKey: .argxordist)
         }
     }
 }

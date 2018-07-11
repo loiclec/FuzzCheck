@@ -18,9 +18,9 @@ typealias PC = UInt
 /// to record code coverage. The code coverage consists of `Feature`s.
 /// For example, a feature might be the identifier of a code block/edge,
 /// or the result of a comparison operation for a certain program counter.
-public final class CodeCoverageSensor: FuzzerSensor {    
+public final class CodeCoverageSensor: FuzzerSensor {
     static let shared: CodeCoverageSensor = .init()
-    /// The maximum number of instrumented code edges allowed by TracePC.
+    /// The maximum number of instrumented code edges allowed by CodeCoverageSensor.
     static let maxNumGuards: Int = 1 << 21
     
     /// The number of instrumented code edges.
@@ -46,15 +46,15 @@ public final class CodeCoverageSensor: FuzzerSensor {
     }
     
     /// An array holding the `Feature`s describing indirect function calls.
-    private var indirectFeatures: [(Feature.Indirect, Feature.Indirect.Reduced)] = []
+    private var indirectFeatures: [Feature.Indirect] = []
     
     /// An array holding the `Feature`s describing comparisons.
-    private var cmpFeatures: [(Feature.Comparison, Feature.Comparison.Reduced)] = []
+    private var cmpFeatures: [Feature.Comparison] = []
     
     /// Handle a call to the sanitizer code coverage function `trace_pc_guard_init`
     /// It assigns a unique value to every pointer inside [start, stop). These values
     /// are the identifiers of the instrumented code edges.
-    /// Update `TracePC.numGuards` appropriately.
+    /// Update `CodeCoverageSensor.numGuards` appropriately.
     func handlePCGuardInit(start: UnsafeMutablePointer<UInt32>, stop: UnsafeMutablePointer<UInt32>) {
         guard start != stop && start.pointee == 0 else { return }
         
@@ -75,40 +75,40 @@ public final class CodeCoverageSensor: FuzzerSensor {
     func handlePCIndir(caller: NormalizedPC, callee: NormalizedPC) {
         let (caller, callee) = (caller.value, callee.value)
         let f = Feature.Indirect(caller: caller, callee: callee)
-        indirectFeatures.append((f, f.reduced))
+        indirectFeatures.append(f)
     }
     
     /// Call the given function for every unique collected `Feature`.
     /// The features are passed in a deterministic order. Therefore, even if
     /// two different executions of the program trigger the same features but
     /// in a different order, `collectFeatures` will pass them in the same order.
-    public func collectFeatures(_ handle: (Feature) -> Void) {
+    public func iterateOverCollectedFeatures(_ handle: (Feature) -> Void) {
         
         for i in eightBitCounters.indices where eightBitCounters[i] != 0 {
             let f = Feature.Edge(pcguard: UInt(i), counter: eightBitCounters[i])
             handle(.edge(f))
         }
         
-        indirectFeatures.sort { ($0.1 < $1.1) }
-        cmpFeatures.sort { ($0.1 < $1.1) }
+        indirectFeatures.sort { ($0 < $1) }
+        cmpFeatures.sort { ($0 < $1) }
 
         // Ensure we don't call `handle` with the same argument twice.
         // This works because the arrays are sorted.
-        var last1: Feature.Indirect.Reduced? = nil
-        for (f, rf) in indirectFeatures where last1 != rf {
+        var last1: Feature.Indirect? = nil
+        for f in indirectFeatures where last1 != f {
             handle(.indirect(f))
-            last1 = rf
+            last1 = f
         }
-        var last2: Feature.Comparison.Reduced? = nil
-        for (f, rf) in cmpFeatures where last2 != rf {
+        var last2: Feature.Comparison? = nil
+        for f in cmpFeatures where last2 != f {
             handle(.comparison(f))
-            last2 = rf
+            last2 = f
         }
     }
     
     func handleTraceCmp <T: BinaryInteger & UnsignedInteger> (pc: NormalizedPC, arg1: T, arg2: T) {
         let f = Feature.Comparison(pc: pc.value, arg1: numericCast(arg1), arg2: numericCast(arg2))
-        cmpFeatures.append((f, f.reduced))
+        cmpFeatures.append(f)
     }
     
     public func resetCollectedFeatures() {

@@ -65,7 +65,7 @@ struct MockWorld <P: FuzzerInputProperties>: FuzzerWorld {
     typealias Feature = MockFeature
     
     var _clock: UInt = 0
-    var rand: Rand
+    var rand: FuzzerPRNG
     
     mutating func getPeakMemoryUsage() -> UInt {
         return 1

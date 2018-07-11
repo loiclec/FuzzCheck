@@ -4,7 +4,7 @@ import XCTest
 
 class FuzzerTests: XCTestCase {
     func testWeightedPick() {
-        var r = Rand.init(seed: 0)
+        var r = FuzzerPRNG.init(seed: 0)
         var weights: [UInt64] = Array.init()
         for i in 0 ..< 10 {
             weights.append(UInt64(i))
@@ -21,7 +21,7 @@ class FuzzerTests: XCTestCase {
     }
     
     func testRandom() {
-        var r = Rand(seed: 2)
+        var r = FuzzerPRNG(seed: 2)
         var timesChosen = Array.init(repeating: 0, count: 128)
         for _ in 0 ..< 1_000_000 {
             let i = Int.random(in: 0 ..< timesChosen.count, using: &r)// timesChosen.indices.randomElement(using: &r)!
@@ -31,7 +31,7 @@ class FuzzerTests: XCTestCase {
     }
     
     func testBoolWithOdds() {
-        var r = Rand.init(seed: 2)
+        var r = FuzzerPRNG.init(seed: 2)
         var timesTrue = 0
         for _ in 0 ..< 1_000_000 {
             if r.bool(odds: 0.27) {

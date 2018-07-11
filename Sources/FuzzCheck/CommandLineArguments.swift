@@ -224,7 +224,7 @@ extension CommandLineFuzzerWorldInfo {
         worldBinder.bind(option: artifactsFolder) { $0.artifactsFolder = $1 }
         worldBinder.bind(option: artifactFileName) { $0.artifactsNameSchema.components = $1 }
         worldBinder.bind(option: artifactFileExtension) { $0.artifactsNameSchema.ext = $1 }
-        worldBinder.bind(option: seed) { $0.rand = Rand(seed: UInt32($1)) }
+        worldBinder.bind(option: seed) { $0.rand = FuzzerPRNG(seed: UInt32($1)) }
         worldBinder.bind(option: inputFile) { $0.inputFile = $1 }
         worldBinder.bind(option: noSaveArtifacts) { x, _ in x.artifactsFolder = nil }
         worldBinder.bind(option: artifactContent) { $0.artifactsContentSchema = $1 }

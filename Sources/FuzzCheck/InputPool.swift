@@ -300,7 +300,7 @@ extension FuzzerState.InputPool {
     }
     
     
-    func randomIndex(_ r: inout Rand) -> InputPoolIndex {
+    func randomIndex(_ r: inout FuzzerPRNG) -> InputPoolIndex {
         // maybe the odd of choosing the favoredInput should decrease as time goes on
         if favoredInput != nil, r.bool(odds: 0.25) {
             return .favored

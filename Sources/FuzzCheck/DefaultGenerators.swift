@@ -8,7 +8,7 @@ public struct IntegerFuzzingMutators <T: FixedWidthInteger & RandomInitializable
         case special
     }
     
-    public func mutate(_ input: inout Input, with mutator: Mutator, _ rand: inout Rand) -> Bool {
+    public func mutate(_ input: inout Input, with mutator: Mutator, _ rand: inout FuzzerPRNG) -> Bool {
         switch mutator {
         case .nudge:
             return nudge(&input, &rand)
@@ -19,19 +19,19 @@ public struct IntegerFuzzingMutators <T: FixedWidthInteger & RandomInitializable
         }
     }
     
-    func nudge(_ x: inout Input, _ r: inout Rand) -> Bool {
+    func nudge(_ x: inout Input, _ r: inout FuzzerPRNG) -> Bool {
         let nudge = Input(r.next(upperBound: 10 as UInt))
         let op: (Input, Input) -> Input = Bool.random(using: &r) ? (&-) : (&+)
         x = op(x, nudge)
         return true
     }
     
-    func random(_ x: inout Input, _ r: inout Rand) -> Bool {
+    func random(_ x: inout Input, _ r: inout FuzzerPRNG) -> Bool {
         x = T.random(using: &r)
         return true
     }
     
-    func special(_ x: inout Input, _ r: inout Rand) -> Bool {
+    func special(_ x: inout Input, _ r: inout FuzzerPRNG) -> Bool {
         let oldX = x
         switch r.next(upperBound: 3 as UInt) {
         case 0 : x = .min
@@ -52,7 +52,7 @@ public struct IntegerFuzzingMutators <T: FixedWidthInteger & RandomInitializable
 }
 
 extension FuzzerInputGenerator {
-    public func initialInputs(_ r: inout Rand) -> [Input] {
+    public func initialInputs(_ r: inout FuzzerPRNG) -> [Input] {
         return (0 ..< 10).map { i in
             var x = baseInput
             for _ in 0 ..< (i * 10) {
@@ -70,7 +70,7 @@ public struct IntegerFuzzing <T: FixedWidthInteger & RandomInitializable> : Fuzz
     
     public init() { }
     
-    public func mutate(_ x: inout T, _ r: inout Rand) -> Bool {
+    public func mutate(_ x: inout T, _ r: inout FuzzerPRNG) -> Bool {
         return mutators.mutate(&x, &r)
     }
 
@@ -85,10 +85,10 @@ public struct IntegerFuzzing <T: FixedWidthInteger & RandomInitializable> : Fuzz
 public struct ArrayMutators <M: FuzzerInputMutatorGroup> : FuzzerInputMutatorGroup {
     public typealias Input = Array<M.Input>
     
-    public let initializeElement: (inout Rand) -> M.Input
+    public let initializeElement: (inout FuzzerPRNG) -> M.Input
     public let elementMutators: M
     
-    public init(initializeElement: @escaping (inout Rand) -> M.Input, elementMutators: M) {
+    public init(initializeElement: @escaping (inout FuzzerPRNG) -> M.Input, elementMutators: M) {
         self.initializeElement = initializeElement
         self.elementMutators = elementMutators
     }
@@ -104,7 +104,7 @@ public struct ArrayMutators <M: FuzzerInputMutatorGroup> : FuzzerInputMutatorGro
         case removeRandom
     }
     
-    public func mutate(_ input: inout Array<M.Input>, with mutator: ArrayMutators<M>.Mutator, _ rand: inout Rand) -> Bool {
+    public func mutate(_ input: inout Array<M.Input>, with mutator: ArrayMutators<M>.Mutator, _ rand: inout FuzzerPRNG) -> Bool {
         switch mutator {
         case .appendNew:
             return appendNew(&input, &rand)
@@ -125,26 +125,26 @@ public struct ArrayMutators <M: FuzzerInputMutatorGroup> : FuzzerInputMutatorGro
         }
     }
     
-    func appendNew(_ x: inout Input, _ r: inout Rand) -> Bool {
+    func appendNew(_ x: inout Input, _ r: inout FuzzerPRNG) -> Bool {
         x.append(initializeElement(&r))
         return true
     }
     
-    func appendRecycled(_ x: inout Input, _ r: inout Rand) -> Bool {
+    func appendRecycled(_ x: inout Input, _ r: inout FuzzerPRNG) -> Bool {
         guard !x.isEmpty else { return false }
         let y = x.randomElement(using: &r)!
         x.append(y)
         return true
     }
     
-    func insertNew(_ x: inout Input, _ r: inout Rand) -> Bool {
+    func insertNew(_ x: inout Input, _ r: inout FuzzerPRNG) -> Bool {
         guard !x.isEmpty else { return false }
         let i = x.indices.randomElement(using: &r)!
         x.insert(initializeElement(&r), at: i)
         return true
     }
     
-    func insertRecycled(_ x: inout Input, _ r: inout Rand) -> Bool {
+    func insertRecycled(_ x: inout Input, _ r: inout FuzzerPRNG) -> Bool {
         guard !x.isEmpty else { return false }
         let y = x.randomElement(using: &r)!
         let i = x.indices.randomElement(using: &r)!
@@ -152,25 +152,25 @@ public struct ArrayMutators <M: FuzzerInputMutatorGroup> : FuzzerInputMutatorGro
         return true
     }
     
-    func removeLast(_ x: inout Input, _ r: inout Rand) -> Bool {
+    func removeLast(_ x: inout Input, _ r: inout FuzzerPRNG) -> Bool {
         guard !x.isEmpty else { return false }
         x.removeLast()
         return true
     }
     
-    func removeFirst(_ x: inout Input, _ r: inout Rand) -> Bool {
+    func removeFirst(_ x: inout Input, _ r: inout FuzzerPRNG) -> Bool {
         guard !x.isEmpty else { return false }
         x.removeFirst()
         return true
     }
     
-    func removeRandom(_ x: inout Input, _ r: inout Rand) -> Bool {
+    func removeRandom(_ x: inout Input, _ r: inout FuzzerPRNG) -> Bool {
         guard !x.isEmpty else { return false }
         x.remove(at: x.indices.randomElement(using: &r)!)
         return true
     }
     
-    func swap(_ x: inout Input, _ r: inout Rand) -> Bool {
+    func swap(_ x: inout Input, _ r: inout FuzzerPRNG) -> Bool {
         
         guard x.count > 1 else { return false }
         let (i, j) = (x.indices.randomElement(using: &r)!, x.indices.randomElement(using: &r)!)
@@ -178,7 +178,7 @@ public struct ArrayMutators <M: FuzzerInputMutatorGroup> : FuzzerInputMutatorGro
         return i != j
     }
     
-    func mutateElement(_ x: inout Input, _ r: inout Rand) -> Bool {
+    func mutateElement(_ x: inout Input, _ r: inout FuzzerPRNG) -> Bool {
         
         guard !x.isEmpty else { return false }
         let i = x.indices.randomElement(using: &r)!

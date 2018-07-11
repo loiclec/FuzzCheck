@@ -39,7 +39,7 @@ public protocol FuzzerWorld {
     mutating func removeFromOutputCorpus(_ input: Input) throws
     mutating func reportEvent(_ event: FuzzerEvent, stats: FuzzerStats)
     
-    var rand: Rand { get set }
+    var rand: FuzzerPRNG { get set }
 }
 
 public struct FuzzerStats {
@@ -72,7 +72,7 @@ public struct FuzzerSettings {
 }
 
 public struct CommandLineFuzzerWorldInfo {
-    public var rand: Rand = Rand(seed: arc4random())
+    public var rand: FuzzerPRNG = FuzzerPRNG(seed: arc4random())
     public var inputFile: File? = nil
     public var inputCorpora: [Folder] = []
     public var outputCorpus: Folder? = nil
@@ -92,7 +92,7 @@ public struct CommandLineFuzzerWorld <Input, Properties> : FuzzerWorld
     public typealias Feature = CodeCoverageSensor.Feature
     
     public var info: CommandLineFuzzerWorldInfo
-    public var rand: Rand {
+    public var rand: FuzzerPRNG {
         get { return info.rand }
         set { info.rand = newValue }
     }

@@ -1,5 +1,5 @@
 
-public struct Rand: RandomNumberGenerator {
+public struct FuzzerPRNG: RandomNumberGenerator {
     
     public var seed: UInt32
     
@@ -13,7 +13,7 @@ public struct Rand: RandomNumberGenerator {
     }
 }
 
-extension Rand {
+extension FuzzerPRNG {
     public mutating func next() -> UInt16 {
         return UInt16(next31() & 0xFFFF)
     }
@@ -78,7 +78,7 @@ extension RandomNumberGenerator {
 }
 
 
-extension Rand {
+extension FuzzerPRNG {
     mutating func shuffle <C> (_ c: inout C) where C: MutableCollection, C: RandomAccessCollection, C.Index: RandomRangeInitializable {
         for i in c.indices.reversed() {
             c.swapAt(C.Index.random(in: c.startIndex ..< c.index(after: i), using: &self), i)

@@ -42,7 +42,7 @@ public final class FuzzerState <Input, Properties, World, Sensor>
     /**
      A property managing the effects and coeffects produced and needed by the fuzzer.
     
-     It provides a source of randomness, performs file operations, gives the current
+     It provides a random number generator, performs file operations, gives the current
      time, the memory consumption, etc.
      */
     var world: World

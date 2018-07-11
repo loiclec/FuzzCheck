@@ -28,7 +28,7 @@ public protocol FuzzerInputGenerator {
      Having a perfect list of initial elements is not essential to FuzzCheck,
      but it can help it start working on the right foot.
      
-     - Parameter rand: a source of randomness
+     - Parameter rand: a random number generator
     */
     func initialInputs(_ rand: inout Rand) -> [Input]
     
@@ -56,19 +56,13 @@ public protocol FuzzerInputGenerator {
      - replace a substring by a keyword relevant to the test function
      
      - Parameter input: the input to mutate
-     - Parameter rand: a source of randomness
+     - Parameter rand: a random number generator
      - Returns: true iff the input was actually mutated
     */
     func mutate(_ input: inout Input, _ rand: inout Rand) -> Bool
 }
 
-/**
- A protocol giving some information about values of type Input, such as its complexity or hash.
- 
- Input itself is not required to conform to any protocol...:
-- to allow multiple different implementations to coexist
-- to allow fuzz-testing of non-nominal types
- */
+/// A protocol giving some information about values of type Input, such as its complexity or hash.
 public protocol FuzzerInputProperties {
     associatedtype Input
     /**
@@ -99,11 +93,11 @@ public protocol FuzzerInputMutatorGroup {
     associatedtype Mutator
 
     /**
-     Mutate the given input using the given mutator and source of randomness.
+     Mutate the given input using the given mutator and random number generator.
      
      - Parameter input: the input to mutate
      - Parameter mutator: the mutator to use to mutate the input
-     - Parameter rand: a source of randomness
+     - Parameter rand: a random number generator
      - Returns: true iff the input was actually mutated
     */
     func mutate(_ input: inout Input, with mutator: Mutator, _ rand: inout Rand) -> Bool
@@ -113,9 +107,9 @@ public protocol FuzzerInputMutatorGroup {
      
      # IMPORTANT
      The second component of the tuples in the array is the sum of the previous weight
-     and the weight of the mutator itself. For example, if we have three mutators
-     `(m1, m2, m3)` with relative weight `(120, 5, 56)`. Then `weightedMutators`
-     should return `[(m1, 120), (m2, 125), (m3, 181)]`.
+     and the weight of the mutator itself. For example, for three mutators `(m1, m2, m3)`
+     with relative weights `(120, 5, 56)`. Then `weightedMutators` should return
+     `[(m1, 120), (m2, 125), (m3, 181)]`.
     */
     var weightedMutators: [(Mutator, UInt)] { get }
 }
@@ -126,7 +120,7 @@ extension FuzzerInputMutatorGroup {
      
      - Parameter input: the input to mutate
      - Parameter mutator: the mutator to use to mutate the input
-     - Parameter rand: a source of randomness
+     - Parameter rand: a random number generator
      - Returns: true iff the input was actually mutated
      */
     public func mutate(_ input: inout Input, _ rand: inout Rand) -> Bool {

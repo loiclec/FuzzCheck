@@ -11,12 +11,12 @@ extension UnsafeMutableBufferPointer {
     }
 }
 
-/// Program Counter: the index of an instruction in the binary
+/// Program Counter: the index of an instruction in the program binary
 typealias PC = UInt
 
 
 /// A FuzzerSensor for recording code coverage.
-/// Please only ever use the instance defined by `CodeCoverageSensor.shared`
+/// Please only use the instance defined by `CodeCoverageSensor.shared`
 public final class CodeCoverageSensor: FuzzerSensor {
     static let shared: CodeCoverageSensor = .init()
     /// The maximum number of instrumented code edges allowed by CodeCoverageSensor.

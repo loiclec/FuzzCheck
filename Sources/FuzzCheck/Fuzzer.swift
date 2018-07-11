@@ -129,13 +129,14 @@ final class Fuzzer <Unit, Generator, Properties, World, Sensor>
         }
         
         precondition(Foundation.Thread.isMainThread, "Fuzzer can only be initialized on the main thread")
-        // :shame:
+        // :shame: please send help
         let idx = Foundation.Thread.callStackSymbols.firstIndex(where: { $0.contains(" main + ")})!
         let adr = Foundation.Thread.callStackReturnAddresses[idx].uintValue
         NormalizedPC.constant = adr
     }
 }
 
+// note: it is not a typealias because I feel bad for the typechecker
 public enum CommandLineFuzzer <Unit, Generator, Properties>
     where
     Generator: FuzzUnitGenerator,

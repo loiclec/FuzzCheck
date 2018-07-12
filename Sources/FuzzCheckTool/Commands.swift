@@ -39,7 +39,10 @@ func minimizeCommand(settings: FuzzerManagerSettings, workerSettings: FuzzerSett
     
     let fileToMinimize = world.inputFile! // TODO: put that requirement in the arguments parser
     let (process, launchPath, environment) = childProcessInfo(settings: settings)
-    let (sh, timerSource) = signalHandlers(process: process, globalTimeout: settings.globalTimeout)
+    let (sh, timerSource) = signalHandlers(process: process, globalTimeout: settings.globalTimeout, preexit: {
+        // libFuzzer says “Failed to minimize beyond...”, but I am not so humble, FuzzCheck probably did a 👌 job
+        print("Could not minimize beyond: \(world.inputFile!.name)")
+    })
     
     // The child processes will create artifacts, we put them all under a folder named <fileToMinimize>.minimized
     // We will launch the child process with the simplest input file in that folder as argument.
@@ -96,7 +99,7 @@ func minimizeCommand(settings: FuzzerManagerSettings, workerSettings: FuzzerSett
 func fuzzCommand(settings: FuzzerManagerSettings, workerSettings: FuzzerSettings, world: CommandLineFuzzerWorldInfo) throws -> Never {
  
     let (process, launchPath, environment) = childProcessInfo(settings: settings)
-    let (sh, timerSource) = signalHandlers(process: process, globalTimeout: settings.globalTimeout)
+    let (sh, timerSource) = signalHandlers(process: process, globalTimeout: settings.globalTimeout, preexit: {})
     
     try run(process: process, launchPath: launchPath, arguments: workerSettings.commandLineArguments + world.commandLineArguments, env: environment)
 
@@ -150,7 +153,7 @@ func interrupt(_ process: Ref<Process>) {
  These two objects are responsible for stopping the child processes and
  the program itself.
  */
-func signalHandlers(process: Ref<Process>, globalTimeout: UInt?) -> (SignalsHandler, DispatchSourceTimer) {
+func signalHandlers(process: Ref<Process>, globalTimeout: UInt?, preexit: @escaping () -> Void) -> (SignalsHandler, DispatchSourceTimer) {
     
     let signals: [Signal] = [.segmentationViolation, .busError, .abort, .illegalInstruction, .floatingPointException, .interrupt, .softwareTermination, .fileSizeLimitExceeded]
     
@@ -160,6 +163,7 @@ func signalHandlers(process: Ref<Process>, globalTimeout: UInt?) -> (SignalsHand
         // see: #wupKfXxNqM8
         childProcessLock.withLock {
             interrupt(process)
+            preexit()
             exit(0)
         }
     }
@@ -174,6 +178,7 @@ func signalHandlers(process: Ref<Process>, globalTimeout: UInt?) -> (SignalsHand
             // see: #wupKfXxNqM8
             childProcessLock.withLock {
                 interrupt(process)
+                preexit()
                 exit(0)
             }
         }

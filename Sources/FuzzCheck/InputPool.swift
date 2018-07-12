@@ -143,7 +143,7 @@ extension FuzzerState.InputPool {
             }
         }
         inputs.append(inputInfo)
-        let worldUpdate1 = updateCoverageScores()
+        let worldUpdate1 = updateScores()
         cumulativeWeights = inputs.scan(0.0) { $0 + $1.score }
 
         return { w in
@@ -160,7 +160,7 @@ extension FuzzerState.InputPool {
      - Complexity: Proportional to the sum of `inputs[i].features.count` for each `i` in
        `inputs.indices` (i.e. expensive)
      */
-    func updateCoverageScores() -> (inout World) throws -> Void {
+    func updateScores() -> (inout World) throws -> Void {
         /*
          NOTE: the logic for computing the scores will probably change, but here
          is an explanation of the current behavior.

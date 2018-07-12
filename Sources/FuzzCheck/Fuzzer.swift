@@ -321,7 +321,7 @@ extension Fuzzer {
             features: []
         )
         state.pool.favoredInput = favoredInput
-        let effect = state.pool.updateCoverageScores()
+        let effect = state.pool.updateScores()
         try effect(&state.world)
         state.settings.maxInputComplexity = favoredInput.complexity.nextDown
         state.world.reportEvent(.didReadCorpus, stats: state.stats)

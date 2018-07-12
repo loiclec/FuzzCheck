@@ -150,26 +150,28 @@ public enum CommandLineFuzzer <Input, Generator, Properties>
     /// Execute the fuzzer command given by `Commandline.arguments` for the given test function and generator.
     public static func launch(test: @escaping (Input) -> Bool, generator: Generator, properties: Properties.Type) throws {
         let (parser, settingsBinder, worldBinder, _) = CommandLineFuzzerWorldInfo.argumentsParser()
+        var settings: FuzzerSettings
+        var world: CommandLineFuzzerWorldInfo
         do {
             let res = try parser.parse(Array(CommandLine.arguments.dropFirst()))
-            var settings: FuzzerSettings = FuzzerSettings()
+            settings = FuzzerSettings()
             try settingsBinder.fill(parseResult: res, into: &settings)
-            var world: CommandLineFuzzerWorldInfo = CommandLineFuzzerWorldInfo()
+            world = CommandLineFuzzerWorldInfo()
             try worldBinder.fill(parseResult: res, into: &world)
-            
-            let fuzzer = SpecializedFuzzer(test: test, generator: generator, settings: settings, world: CommandLineFuzzerWorld(info: world), sensor: .shared)
-            switch fuzzer.state.settings.command {
-            case .fuzz:
-                try fuzzer.loop()
-            case .minimize:
-                try fuzzer.minimizeLoop()
-            case .read:
-                fuzzer.state.input = try fuzzer.state.world.readInputFile()
-                try fuzzer.testCurrentInput()
-            }
         } catch let e {
             print(e)
             parser.printUsage(on: stdoutStream)
+            return
+        }
+        let fuzzer = SpecializedFuzzer(test: test, generator: generator, settings: settings, world: CommandLineFuzzerWorld(info: world), sensor: .shared)
+        switch fuzzer.state.settings.command {
+        case .fuzz:
+            try fuzzer.loop()
+        case .minimize:
+            try fuzzer.minimizeLoop()
+        case .read:
+            fuzzer.state.input = try fuzzer.state.world.readInputFile()
+            try fuzzer.testCurrentInput()
         }
     }
 }

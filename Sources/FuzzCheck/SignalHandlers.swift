@@ -7,9 +7,7 @@ typealias Thread = Basic.Thread
 
 /// Interrupt signal handling global variables
 private var receivedSignal: Signal? = nil
-private var receivedSignalLock = Lock()
 
-// TODO: get rid of the semaphores, only use the lock
 private var signalSemaphore = DispatchSemaphore(value: 0)
 private var writeSignalSemaphore = DispatchSemaphore(value: 1)
 
@@ -48,6 +46,9 @@ public final class SignalsHandler {
                 if let _receivedSignal = receivedSignal {
                     handler(_receivedSignal)
                     receivedSignal = nil
+                } else { // if the signal semaphore was signaled but no received signal exists, then
+                         // it means the Thread should finish its execution
+                    return
                 }
                 writeSignalSemaphore.signal()
             }
@@ -60,7 +61,8 @@ public final class SignalsHandler {
             // Restore the old action and close the write end of pipe.
             sigaction(sig.rawValue, &oldActions[Int(sig.rawValue)], nil)
         }
-        signalSemaphore = DispatchSemaphore.init(value: 0)
+        receivedSignal = nil
+        signalSemaphore.signal()
         thread.join()
     }
 }

@@ -165,7 +165,7 @@ public enum CommandLineFuzzer <Input, Generator, Properties>
                 try fuzzer.minimizeLoop()
             case .read:
                 fuzzer.state.input = try fuzzer.state.world.readInputFile()
-                fuzzer.testCurrentInput()
+                try fuzzer.testCurrentInput()
             }
         } catch let e {
             print(e)
@@ -179,7 +179,7 @@ extension Fuzzer {
      Run and record the test function for the current test input.
      Exit and save the artifact if the test function failed.
     */
-    func testCurrentInput() {
+    func testCurrentInput() throws {
         state.sensor.resetCollectedFeatures()
 
         state.sensor.isRecording = true
@@ -190,7 +190,7 @@ extension Fuzzer {
             state.world.reportEvent(.testFailure, stats: state.stats)
             var features: [Sensor.Feature] = []
             state.sensor.iterateOverCollectedFeatures { features.append($0) }
-            try! state.world.saveArtifact(input: state.input, features: features, score: state.pool.score, kind: .testFailure)
+            try state.world.saveArtifact(input: state.input, features: features, score: state.pool.score, kind: .testFailure)
             exit(FuzzerTerminationStatus.testFailure.rawValue)
         }
 
@@ -241,7 +241,7 @@ extension Fuzzer {
      analyze the recording, and update the input pool if needed.
      */
     func processCurrentInput() throws {
-        testCurrentInput()
+        try testCurrentInput()
         
         let result = analyze()
         guard let newPoolElement = result else {

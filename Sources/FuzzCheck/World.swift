@@ -150,7 +150,9 @@ public struct CommandLineFuzzerWorld <Input, Properties> : FuzzerWorld
     
     public func removeFromOutputCorpus(_ input: Input) throws {
         guard let outputCorpus = info.outputCorpus else { return }
-        try outputCorpus.file(named: hexString(Properties.hash(of: input))).delete()
+        let nameInfo = ArtifactNameInfo(hash: Properties.hash(of: input), complexity: Properties.complexity(of: input), kind: .input)
+        let name = ArtifactNameWithoutIndex(schema: info.artifactsNameSchema, info: nameInfo).fillGapToBeUnique(from: [])
+        try outputCorpus.file(named: name).delete()
     }
     
     public mutating func addToOutputCorpus(_ input: Input) throws {

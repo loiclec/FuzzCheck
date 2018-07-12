@@ -76,7 +76,6 @@ public struct CommandLineFuzzerWorldInfo {
     public var inputFile: File? = nil
     public var inputCorpora: [Folder] = []
     public var outputCorpus: Folder? = nil
-    public var outputCorpusNames: Set<String> = []
     public var artifactsFolder: Folder? = (try? Folder.current.subfolder(named: "artifacts")) ?? Folder.current
     public var artifactsNameSchema: ArtifactSchema.Name = ArtifactSchema.Name(components: [.kind, .literal("-"), .hash], ext: "json")
     public var artifactsContentSchema: ArtifactSchema.Content = ArtifactSchema.Content(features: false, score: false, hash: false, complexity: false, kind: false)
@@ -161,7 +160,6 @@ public struct CommandLineFuzzerWorld <Input, Properties> : FuzzerWorld
         let data = try encoder.encode(input)
         let nameInfo = ArtifactNameInfo(hash: Properties.hash(of: input), complexity: Properties.complexity(of: input), kind: .input)
         let name = ArtifactNameWithoutIndex(schema: info.artifactsNameSchema, info: nameInfo).fillGapToBeUnique(from: [])
-        info.outputCorpusNames.insert(name)
         try outputCorpus.createFileIfNeeded(withName: name, contents: data)
     }
     

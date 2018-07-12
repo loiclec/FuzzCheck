@@ -182,7 +182,7 @@ extension CommandLineFuzzerWorldInfo {
             option: "--artifact-content",
             shortName: nil,
             kind: ArtifactSchema.Content.self,
-            usage: "kaffhdjk" // FIXME
+            usage: "A list of comma-separated fields that the JSON in the artifact file should contain. (e.g. hash,complexity,features)"
         )
         
         let command = parser.add(

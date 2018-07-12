@@ -124,7 +124,7 @@ func run(process: Ref<Process>, launchPath: String, arguments: [String], env: [S
 }
 
 /// Shut down the given process. First send an interrupt signal, then
-/// force-suspend it if it didn't process the interrupt quickly enough.
+/// force-suspend it if it didn't handle the interrupt quickly enough.
 func interrupt(_ process: Ref<Process>) {
     // can't interrupt a process that is not running
     guard process.data.isRunning else { return }
@@ -180,7 +180,7 @@ func signalHandlers(process: Ref<Process>, globalTimeout: UInt?) -> (SignalsHand
         if #available(OSX 10.12, *) {
             timerSource.activate()
         } else {
-            timerSource.resume()
+            timerSource.resume() // TODO: is this correct?
         }
     }
     

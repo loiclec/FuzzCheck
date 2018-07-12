@@ -12,14 +12,7 @@ Because FuzzCheck is a Swift package itself, it is easier to modify than libFuzz
 
 ## Installation
 
-You can install FuzzCheck by adding it as a dependency of your Swift package:
-```swift
-dependencies: [
-    .package(url: "https://github.com/loiclec/FuzzCheck.git", from: Version(0, 1, 0))
-]
-```
-
-But unfortunately, it is not the only thing you need to do in order to use it. FuzzCheck only works when the `fuzzer` sanitizer is enabled for the targets that you wish to test. Moreover, this sanitizer is only available on development snapshots of Swift. Therefore, you will need to install a Swift 4.2 Development Snapshot and to compile your package with a modified version of the Swift Package Manager. It is easier than it sounds, here are the step-by-step instructions to do so:
+FuzzCheck only works when the `fuzzer` sanitizer is enabled for the targets that you wish to test. Moreover, this sanitizer is only available on development snapshots of Swift. Therefore, you will need to install a Swift 4.2 Development Snapshot and to compile your package with a modified version of the Swift Package Manager. It is easier than it sounds, here are the step-by-step instructions to do so:
 
 - go to [swift.org/downloads](https://swift.org/download#snapshots) and download the Swift 4.2 Development Snapshot by clicking on the “Xcode” link and following the instructions. 
 - Find the path of the `swiftc` executable you just installed and assign it to the `SWIFT_EXEC` environment variable. For example, if you installed the snapshot from the 3rd of July, you should run:
@@ -58,50 +51,50 @@ The version of SwiftPM that you built adds the ability to specify a `fuzzedTarge
 
 ## Using FuzzCheck
 
-I have created a sample project called `FuzzTestExample` that you can use to get familiar with FuzzCheck. But before explaining how it works, let's try to launch it and finally see some results!
+I have created a sample project called `FuzzCheckExample` that you can use to get familiar with FuzzCheck. But before explaining how it works, let's try to launch it and finally see some results!
 
 ```bash
-git clone https://github.com/loiclec/FuzzTestExample
-cd FuzzTestExample
+git clone https://github.com/loiclec/FuzzCheckExample.git
+cd FuzzCheckExample
 # Use the swift-build executable from the modified SwiftPM and use the fuzz-release configuration
 ../swift-package-manager/.build/x86_64-apple-macosx10.10/debug/swift-build -c fuzz-release
 # launch FuzzCheckTool with the test target as argument and the randomness seed 1
-.build/fuzz-release/FuzzCheckTool --target FuzzTestExample --seed 1
+.build/fuzz-release/FuzzCheckTool --target FuzzCheckExample --seed 1
 ```
 After a few seconds, the process will stop:
 ```
 ...
 ...
-NEW     528437  score: 122.0    corp: 81        exec/s: 106935  rss: 8
 DELETE 1
-NEW     528502  score: 122.0    corp: 81        exec/s: 106905  rss: 8
+NEW     528502  score: 122.0    corp: 81        exec/s: 103402  rss: 8
 DELETE 1
-NEW     528742  score: 122.0    corp: 81        exec/s: 106879  rss: 8
+NEW     528742  score: 122.0    corp: 81        exec/s: 103374  rss: 8
 
 ================ TEST FAILED ================
-529434  score: 122.0    corp: 81        exec/s: 106879  rss: 8
+529434  score: 122.0    corp: 81        exec/s: 103374  rss: 8
+Saving testFailure at /Users/loic/Projects/fuzzcheck-example/artifacts/testFailure-78a1af7b1be086ca0.json
 ```
-It detected a test failure after 540659 iterations, and it saved the JSON-encoded crashing input inside the file `testFailure-78a1af7b1be086ca0.json`. Half a million iterations might seem like a lot, but if the test used a simple exhaustive search, it would have *never* found that test failure, even after trillions of iterations.
+It detected a test failure after 529434 iterations, and it saved the JSON-encoded crashing input inside the file `testFailure-78a1af7b1be086ca0.json`. Half a million iterations might seem like a lot, but if the test used a simple exhaustive search, it would have *never* found that test failure, even after trillions of iterations.
 
 ### The Package.swift manifest
 
-In your Package.swift manifest, you need to add `FuzzCheck` as a dependency, and to specify the list of targets that you wish to fuzz-test, and to create a test executable. For example:
+In your Package.swift manifest, you need to add `FuzzCheck` as a dependency and to specify the list of targets that you wish to fuzz-test. For example:
 
 ```swift
 // swift-tools-version:4.2
 import PackageDescription
 
 let package = Package(
-    name: "FuzzTestExample",
+    name: "FuzzCheckExample",
     products: [
         .library(name: "Graph", targets: ["Graph"]),
-        .executable(name: "FuzzTestExample", targets: ["FuzzTestExample"])
+        .executable(name: "FuzzCheckExample", targets: ["FuzzCheckExample"])
     ],
     dependencies: [
-        .package(path: "../fuzzcheck")
+        .package(url: "https://github.com/loiclec/FuzzCheck.git", .revision("e20fad2beae3dd1eb003aa6a4813cec2006078b4"))
     ],
     targets: [
-        .target(name: "FuzzTestExample", dependencies: [
+        .target(name: "FuzzCheckExample", dependencies: [
             "FuzzCheck",
             "FuzzCheckTool", 
             "GraphFuzzerInputGenerator", 
@@ -109,20 +102,19 @@ let package = Package(
         ]),
         .target(name: "GraphFuzzerInputGenerator", dependencies: ["FuzzCheck", "Graph"]),
         .target(name: "Graph", dependencies: [])
-        
     ],
     fuzzedTargets: [
-        "FuzzTestExample",
+        "FuzzCheckExample",
         "Graph"
     ]
 )
+
 ```
 
-This is a `Package.swift` file for a library that implements a graph data structure. It contains one fuzz test called `FuzzTestExample`, added as a product executable. It has a `FuzzCheck` dependency and specifies the name of the targets that need to be instrumented for fuzz-testing with the argument `fuzzedTargets`. We will see later what `GraphFuzzerInputGenerator` is.
+This is a `Package.swift` file for a library that implements a graph data structure. It contains one fuzz test called `FuzzCheckExample`, added as a product executable. It has a `FuzzCheck` dependency and specifies the name of the targets that need to be instrumented for fuzz-testing with the argument `fuzzedTargets`. We will see later what `GraphFuzzerInputGenerator` is.
 
-The test itself is located inside `Sources/FuzzTestExample/main.swift`:
+The test itself is located inside `Sources/FuzzCheckExample/main.swift`:
 ```swift
-
 import FuzzCheck
 import GraphFuzzerInputGenerator
 import Graph
@@ -193,9 +185,9 @@ Without passing on any special knowledge to the fuzzer about the test, it was ab
 ## Creating a fuzz test
 
 To test a function `(T) -> Bool`, you need a `FuzzerInputGenerator` to generate values of `T`. A `FuzzerInputGenerator` has three requirements:
-1. a property `baseInput` containing the simplest possible value of `T` (the empty array)
-2. a function to slightly mutate values of `T`
-3. a function to generate random values of `T` (there is a default implementation of that one based on `mutators`)
+1. a property `baseInput` containing the simplest possible value of `T` (e.g. the empty array)
+2. a function to slightly mutate values of `T` (e.g. append an element to an array)
+3. a function to generate random values of `T` (there is a default implementation of that one based on the mutate function)
 
 ```swift
 /// A protocol defining how to generate and mutate values of type Input.
@@ -208,6 +200,16 @@ public protocol FuzzerInputGenerator {
     func initialInputs(_ rand: inout FuzzerPRNG) -> [Input]
 
     func mutate(_ input: inout Input, _ rand: inout FuzzerPRNG) -> Bool
+}
+```
+
+You also need a `FuzzerInputProperties` type, which gives the complexity of an input and its hash:
+```swift
+public protocol FuzzerInputProperties {
+    associatedtype Input
+
+    static func complexity(of input: Input) -> Double    
+    static func hash(of input: Input) -> Int
 }
 ```
 
@@ -233,3 +235,10 @@ while true {
     }
 }
 ```
+
+## Caveats
+
+- tests that use more than one thread are not supported (but should be in the future)
+- almost no FuzzInputGenerator implementations are provided yet
+- large codebases will be slow to fuzz-test. Work needs to be done to make it faster   
+- some of the fundamental design and implementation details might still change

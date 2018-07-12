@@ -28,22 +28,10 @@ public final class CodeCoverageSensor: FuzzerSensor {
     /// True iff `self` is currently recording the execution of the program
     public var isRecording = false
     
-    /// A bit array. The bit at index `i` of this buffer is true iff the
-    /// code edge identified by the `pc_guard` of value `i` was visited.
-    /// Unlike `eightBitCounters`, this property is never reset during the
-    /// lifetime of the program. Therefore, it represents the total
-    /// cumulative edge coverage reached since the initial launch.
-    var edges: UnsafeMutableBufferPointer<UInt> = .allocateAndInitializeTo(0, capacity: 1)
-    
     /// The value at index `i` of this buffer holds the number of time that
     /// the code identified by the `pc_guard` of value `i` was visited.
     var eightBitCounters: UnsafeMutableBufferPointer<UInt16> = .allocateAndInitializeTo(0, capacity: 1)
-    
-    /// Return the total number of edges that were visited
-    func getTotalEdgeCoverage() -> Int {
-        return edges.reduce(0) { $0 + ($1 != 0 ? 1 : 0) }
-    }
-    
+        
     /// An array holding the `Feature`s describing indirect function calls.
     private var indirectFeatures: [Feature.Indirect] = []
     
@@ -65,15 +53,14 @@ public final class CodeCoverageSensor: FuzzerSensor {
         }
         // Not ideal, but oh well
         eightBitCounters.deallocate()
-        edges.deallocate()
         eightBitCounters = .allocateAndInitializeTo(0, capacity: numGuards+1)
-        edges = .allocateAndInitializeTo(0, capacity: numGuards+1)
     }
 
     /// Handle a call to the sanitizer code coverage function `trace_pc_indir`
     func handlePCIndir(caller: NormalizedPC, callee: NormalizedPC) {
         let (caller, callee) = (caller.value, callee.value)
         let f = Feature.Indirect(caller: caller, callee: callee)
+        // TODO: could this be guarded by a lock, or would it ruin performance?
         indirectFeatures.append(f)
     }
     
@@ -107,6 +94,7 @@ public final class CodeCoverageSensor: FuzzerSensor {
     
     func handleTraceCmp <T: BinaryInteger & UnsignedInteger> (pc: NormalizedPC, arg1: T, arg2: T) {
         let f = Feature.Comparison(pc: pc.value, arg1: numericCast(arg1), arg2: numericCast(arg2))
+        // TODO: could this be guarded by a lock, or would it ruin performance?
         cmpFeatures.append(f)
     }
     

@@ -3,6 +3,10 @@ import Darwin
 import Foundation
 import CBuiltinsNotAvailableInSwift
 
+/**
+ Normalize the value of a program counter so that it doesn't vary
+ between runs of the same program.
+*/
 struct NormalizedPC {
     static var constant: PC = 0
     let raw: PC
@@ -16,9 +20,9 @@ struct NormalizedPC {
 @_cdecl("__sanitizer_cov_trace_pc_guard")
 func trace_pc_guard(g: UnsafeMutablePointer<UInt32>?) {
     guard CodeCoverageSensor.shared.isRecording, let g = g else { return }
-    let pc = PC(bitPattern: __return_address())
     let idx = Int(g.pointee)
-    CodeCoverageSensor.shared.edges[idx] = pc
+    // TODO: could this be guarded by a lock, or would it ruin performance?
+    // TODO: is the overflow check important, or could I let it overflow?
     let (result, overflow) = CodeCoverageSensor.shared.eightBitCounters[idx].addingReportingOverflow(1)
     if !overflow {
         CodeCoverageSensor.shared.eightBitCounters[idx] = result
@@ -45,9 +49,6 @@ func trace_cmp8(arg1: UInt64, arg2: UInt64) {
     CodeCoverageSensor.shared.handleTraceCmp(pc: pc, arg1: arg1, arg2: arg2)
 }
 
-// Now the __sanitizer_cov_trace_const_cmp[1248] callbacks just mimic
-// the behaviour of __sanitizer_cov_trace_cmp[1248] ones. This, however,
-// should be changed later to make full use of instrumentation.
 @_cdecl("__sanitizer_cov_trace_const_cmp8")
 func trace_const_cmp8(arg1: UInt64, arg2: UInt64) {
     guard CodeCoverageSensor.shared.isRecording else { return }
@@ -107,6 +108,10 @@ func trace_const_cmp1(arg1: UInt8, arg2: UInt8) {
 func trace_switch(val: UInt64, cases: UnsafePointer<UInt64>) {
     guard CodeCoverageSensor.shared.isRecording else { return }
 
+    // TODO: this was copied from libFuzzer and I never bothered understanding it
+    // - why is `!(vals[Int(n - 1)] < 256 && val < 256)` “the most common and boring case”?
+    // - why do I handle switches the same way as comparison operations?
+    
     let n = cases[0]
     let valSizeInBits = cases[1]
     let vals = cases.advanced(by: 2)

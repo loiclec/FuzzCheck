@@ -114,8 +114,6 @@ This manifest:
 - has a `fuzzedTargets` argument containing the targets that needs to be compiled with the `fuzzer` sanitizer
 - has a `GraphFuzzerInputGenerator` target, which defines how to mutate values of type `Graph`. This is required by FuzzCheck.
 
-It contains one fuzz test called `FuzzCheckExample`, added as a product executable. It has a `FuzzCheck` dependency and specifies the name of the targets that need to be instrumented for fuzz-testing with the argument `fuzzedTargets`. We will see later what `GraphFuzzerInputGenerator` is.
-
 The test itself is located inside `Sources/FuzzCheckExample/main.swift`:
 ```swift
 import FuzzCheck

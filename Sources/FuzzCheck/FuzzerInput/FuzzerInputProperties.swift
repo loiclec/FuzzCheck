@@ -12,7 +12,7 @@ public protocol FuzzerInputProperties {
      
      FuzzCheck will prefer using inputs with a smaller complexity.
      
-     - Important: The return value must be >= 1.0
+     - Important: The return value must be >= 0.0
      
      ## Examples
      - an array might have a complexity equal to the sum of complexities of its elements
@@ -24,6 +24,14 @@ public protocol FuzzerInputProperties {
     
     static func convertToCodable(_ input: Input) -> CodableInput
     static func convertFromCodable(_ codable: CodableInput) -> Input
+}
+
+extension FuzzerInputProperties {
+    internal static func adjustedComplexity(of input: Input) -> Double {
+        let cplx = complexity(of: input)
+        precondition(cplx >= 0.0)
+        return cplx + 1.0
+    }
 }
 
 extension FuzzerInputProperties {

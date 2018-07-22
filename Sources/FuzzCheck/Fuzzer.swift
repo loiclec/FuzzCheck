@@ -203,7 +203,7 @@ extension Fuzzer {
         var bestInputForFeatures: [Sensor.Feature] = []
         var otherFeatures: [Sensor.Feature] = []
 
-        let currentInputComplexity = Generator.complexity(of: state.input)
+        let currentInputComplexity = Generator.adjustedComplexity(of: state.input)
         
         state.sensor.iterateOverCollectedFeatures { feature in
             guard let oldComplexity = state.pool.smallestInputComplexityForFeature[feature] else {
@@ -309,7 +309,7 @@ extension Fuzzer {
         let input = try state.world.readInputFile()
         let favoredInput = State.InputPool.Element(
             input: input,
-            complexity: Generator.complexity(of: input),
+            complexity: Generator.adjustedComplexity(of: input),
             features: []
         )
         state.pool.favoredInput = favoredInput

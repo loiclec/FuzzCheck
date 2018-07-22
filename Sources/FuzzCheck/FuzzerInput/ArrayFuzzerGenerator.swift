@@ -42,7 +42,7 @@ public struct ArrayFuzzerGenerator <G: FuzzerInputGenerator> : FuzzerInputGenera
     public typealias CodableInput = [G.CodableInput]
     
     public static func complexity(of input: Input) -> Double {
-        return input.reduce(0) { $0 + G.complexity(of: $1) } + 1
+        return input.reduce(0) { $0 + G.complexity(of: $1) }
     }
     public static func hash(_ input: Input, into hasher: inout Hasher) {
         for x in input {

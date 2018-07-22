@@ -288,7 +288,7 @@ extension FuzzerState.InputPool {
                 try w.removeFromOutputCorpus(u)
             }
             if !inputsToDelete.isEmpty {
-                print("DELETE \(inputsToDelete.count)")
+                print("DELETE \(inputsToDelete.count)") // TODO: this shouldn't be here
             }
         }
 

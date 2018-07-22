@@ -3,8 +3,8 @@
 //  FuzzCheck
 //
 
-/// A protocol defining how to generate and mutate values of type Input.
-public protocol FuzzerInputGenerator {
+/// A protocol defining how to generate, mutate, analyze, and store values of type Input.
+public protocol FuzzerInputGenerator: FuzzerInputProperties {
     
     associatedtype Input
     
@@ -21,6 +21,18 @@ public protocol FuzzerInputGenerator {
     var baseInput: Input { get }
     
     /**
+     Return a new input to test.
+     
+     It can be completely random or drawn from a corpus of “special” inputs
+     or generated in any other way that yields a wide variety of inputs.
+    
+     - Parameter maxComplexity: the maximum value of the generated input's complexity
+     - Parameter rand: a random number generator
+     - Returns: The new generated input
+     */
+    func newInput(maxComplexity: Double, _ rand: inout FuzzerPRNG) -> Input
+    
+    /**
      Returns an array of initial inputs to fuzz-test.
      
      The elements of the array should be different from each other, and
@@ -34,7 +46,7 @@ public protocol FuzzerInputGenerator {
      
      - Parameter rand: a random number generator
      */
-    func initialInputs(_ rand: inout FuzzerPRNG) -> [Input]
+    func initialInputs(maxComplexity: Double, _ rand: inout FuzzerPRNG) -> [Input]
     
     /**
      Mutate the given input.
@@ -64,6 +76,15 @@ public protocol FuzzerInputGenerator {
      - Returns: true iff the input was actually mutated
      */
     func mutate(_ input: inout Input, _ rand: inout FuzzerPRNG) -> Bool
+}
+
+extension FuzzerInputGenerator {
+    // Default implementation: generate 10 new inputs
+    public func initialInputs(maxComplexity: Double, _ r: inout FuzzerPRNG) -> [Input] {
+        return (0 ..< 10).map { _ in
+            newInput(maxComplexity: maxComplexity, &r)
+        }
+    }
 }
 
 /**

@@ -98,19 +98,17 @@ public final class FuzzerState <Input, Properties, World, Sensor>
  This type is a bit too complex to make part of the public API and end users
  should only used (partly) specialized versions of it, like CommandLineFuzzer.
  */
-final class Fuzzer <Input, Generator, Properties, World, Sensor>
+final class Fuzzer <Input, Generator, World, Sensor>
     where
     Generator: FuzzerInputGenerator,
-    Properties: FuzzerInputProperties,
     World: FuzzerWorld,
     Sensor: FuzzerSensor,
     World.Feature == Sensor.Feature,
     Generator.Input == Input,
-    Properties.Input == Input,
     World.Input == Input
 {
     
-    typealias State = FuzzerState<Input, Properties, World, Sensor>
+    typealias State = FuzzerState<Input, Generator, World, Sensor>
     
     let state: State
     let generator: Generator
@@ -137,18 +135,12 @@ final class Fuzzer <Input, Generator, Properties, World, Sensor>
 }
 
 // note: it is not a typealias because I feel bad for the typechecker
-public enum CommandLineFuzzer <Input, Generator, Properties>
-    where
-    Generator: FuzzerInputGenerator,
-    Properties: FuzzerInputProperties,
-    Generator.Input == Input,
-    Properties.Input == Input,
-    Input: Codable
-{
-    typealias SpecializedFuzzer = Fuzzer<Input, Generator, Properties, CommandLineFuzzerWorld<Input, Properties>, CodeCoverageSensor>
+public enum CommandLineFuzzer <Generator: FuzzerInputGenerator> {
+    public typealias Input = Generator.Input
+    typealias SpecializedFuzzer = Fuzzer<Input, Generator, CommandLineFuzzerWorld<Input, Generator>, CodeCoverageSensor>
 
     /// Execute the fuzzer command given by `Commandline.arguments` for the given test function and generator.
-    public static func launch(test: @escaping (Input) -> Bool, generator: Generator, properties: Properties.Type) throws {
+    public static func launch(test: @escaping (Input) -> Bool, generator: Generator) throws {
         let (parser, settingsBinder, worldBinder, _) = CommandLineFuzzerWorldInfo.argumentsParser()
         var settings: FuzzerSettings
         var world: CommandLineFuzzerWorldInfo
@@ -211,7 +203,7 @@ extension Fuzzer {
         var bestInputForFeatures: [Sensor.Feature] = []
         var otherFeatures: [Sensor.Feature] = []
 
-        let currentInputComplexity = Properties.complexity(of: state.input)
+        let currentInputComplexity = Generator.complexity(of: state.input)
         
         state.sensor.iterateOverCollectedFeatures { feature in
             guard let oldComplexity = state.pool.smallestInputComplexityForFeature[feature] else {
@@ -266,7 +258,7 @@ extension Fuzzer {
         for _ in 0 ..< state.settings.mutateDepth {
             guard state.stats.totalNumberOfRuns < state.settings.maxNumberOfRuns else { break }
             guard generator.mutate(&state.input, &state.world.rand) else { break  }
-            guard Properties.complexity(of: state.input) < state.settings.maxInputComplexity else { continue }
+            guard Generator.complexity(of: state.input) < state.settings.maxInputComplexity else { continue }
             try processCurrentInput()
         }
     }
@@ -278,10 +270,10 @@ extension Fuzzer {
     func processInitialInputs() throws {
         var inputs = try state.world.readInputCorpus()
         if inputs.isEmpty {
-            inputs += generator.initialInputs(&state.world.rand)
+            inputs += generator.initialInputs(maxComplexity: state.settings.maxInputComplexity, &state.world.rand)
         }
         // Filter the inputs that are too complex
-        inputs = inputs.filter { Properties.complexity(of: $0) <= state.settings.maxInputComplexity }
+        inputs = inputs.filter { Generator.complexity(of: $0) <= state.settings.maxInputComplexity }
         
         for input in inputs {
             state.input = input
@@ -317,7 +309,7 @@ extension Fuzzer {
         let input = try state.world.readInputFile()
         let favoredInput = State.InputPool.Element(
             input: input,
-            complexity: Properties.complexity(of: input),
+            complexity: Generator.complexity(of: input),
             features: []
         )
         state.pool.favoredInput = favoredInput

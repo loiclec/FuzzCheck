@@ -84,7 +84,6 @@ public struct CommandLineFuzzerWorldInfo {
 
 public struct CommandLineFuzzerWorld <Input, Properties> : FuzzerWorld
     where
-    Input: Codable,
     Properties: FuzzerInputProperties,
     Properties.Input == Input
 {
@@ -116,8 +115,8 @@ public struct CommandLineFuzzerWorld <Input, Properties> : FuzzerWorld
             return
         }
         let complexity = Properties.complexity(of: input)
-        let hash = Properties.hash(of: input)
-        let content = Artifact.Content.init(schema: info.artifactsContentSchema, input: input, features: features, score: score, hash: hash, complexity: complexity, kind: kind)
+        let hash = Properties.hashValue(of: input)
+        let content = Artifact.Content.init(schema: info.artifactsContentSchema, input: Properties.convertToCodable(input), features: features, score: score, hash: hash, complexity: complexity, kind: kind)
         let encoder = JSONEncoder()
         encoder.outputFormatting = .prettyPrinted
         let data = try encoder.encode(content)
@@ -138,19 +137,19 @@ public struct CommandLineFuzzerWorld <Input, Properties> : FuzzerWorld
         let decoder = JSONDecoder()
         
         let data = try info.inputFile!.read()
-        return try decoder.decode(Artifact<Input>.Content.self, from: data).input
+        return try Properties.convertFromCodable(decoder.decode(Artifact<Properties.CodableInput>.Content.self, from: data).input)
     }
     
     public func readInputCorpus() throws -> [Input] {
         let decoder = JSONDecoder()
         return try info.inputCorpora
             .flatMap { $0.files }
-            .map { try decoder.decode(Artifact<Input>.Content.self, from: $0.read()).input }
+            .map { try Properties.convertFromCodable(decoder.decode(Artifact<Properties.CodableInput>.Content.self, from: $0.read()).input) }
     }
     
     public func removeFromOutputCorpus(_ input: Input) throws {
         guard let outputCorpus = info.outputCorpus else { return }
-        let nameInfo = ArtifactNameInfo(hash: Properties.hash(of: input), complexity: Properties.complexity(of: input), kind: .input)
+        let nameInfo = ArtifactNameInfo(hash: Properties.hashValue(of: input), complexity: Properties.complexity(of: input), kind: .input)
         let name = ArtifactNameWithoutIndex(schema: info.artifactsNameSchema, info: nameInfo).fillGapToBeUnique(from: [])
         try outputCorpus.file(named: name).delete()
     }
@@ -159,8 +158,8 @@ public struct CommandLineFuzzerWorld <Input, Properties> : FuzzerWorld
         guard let outputCorpus = info.outputCorpus else { return }
         let encoder = JSONEncoder()
         encoder.outputFormatting = .prettyPrinted
-        let data = try encoder.encode(input)
-        let nameInfo = ArtifactNameInfo(hash: Properties.hash(of: input), complexity: Properties.complexity(of: input), kind: .input)
+        let data = try encoder.encode(Properties.convertToCodable(input))
+        let nameInfo = ArtifactNameInfo(hash: Properties.hashValue(of: input), complexity: Properties.complexity(of: input), kind: .input)
         let name = ArtifactNameWithoutIndex(schema: info.artifactsNameSchema, info: nameInfo).fillGapToBeUnique(from: [])
         try outputCorpus.createFileIfNeeded(withName: name, contents: data)
     }

@@ -1,29 +1,36 @@
 //
-//  StringFuzzerInput.swift
+//  StringFuzzerGenerator.swift
 //  FuzzCheck
 //
 
-public struct UnicodeScalarViewFuzzerInput: FuzzerInputGenerator, FuzzerInputProperties {
+public struct UnicodeScalarViewFuzzerGenerator: FuzzerInputGenerator, FuzzerInputProperties {
     public typealias Input = String
     
     public let baseInput: String = ""
     let mutators = UnicodeScalarViewFuzzerMutators()
     
     public func newInput(maxComplexity: Double, _ rand: inout FuzzerPRNG) -> String {
-        let targetComplexity = Double.random(in: 1 ..< maxComplexity, using: &rand)
+        let targetComplexity = Double.random(in: 0 ..< maxComplexity, using: &rand)
         
         var s = ""
+        var currentComplexity = UnicodeScalarViewFuzzerGenerator.complexity(of: s)
         while true {
-            _ = mutate(&s, &rand)
-            if UnicodeScalarViewFuzzerInput.complexity(of: s) >= targetComplexity {
-                _ = mutators.mutate(&s, with: .removeRandom, &rand)
-                return s
+            _ = mutators.mutate(&s, with: .appendRandom, spareComplexity: targetComplexity - currentComplexity, &rand)
+            currentComplexity = UnicodeScalarViewFuzzerGenerator.complexity(of: s)
+            
+            while currentComplexity >= targetComplexity {
+                _ = mutators.mutate(&s, with: .removeRandom, spareComplexity: 0, &rand)
+                currentComplexity = UnicodeScalarViewFuzzerGenerator.complexity(of: s)
+                if currentComplexity <= targetComplexity {
+                    return s
+                }
             }
+
         }
     }
     
-    public func mutate(_ input: inout String, _ rand: inout FuzzerPRNG) -> Bool {
-        return mutators.mutate(&input, &rand)
+    public func mutate(_ input: inout String, _ spareComplexity: Double, _ rand: inout FuzzerPRNG) -> Bool {
+        return mutators.mutate(&input, spareComplexity, &rand)
     }
     public static func complexity(of input: String) -> Double {
         return Double(input.utf16.count)
@@ -79,14 +86,14 @@ struct UnicodeScalarViewFuzzerMutators: FuzzerInputMutatorGroup {
         }
     }
     
-    func mutate(_ input: inout String, with mutator: Mutator, _ rand: inout FuzzerPRNG) -> Bool {
+    func mutate(_ input: inout String, with mutator: Mutator, spareComplexity: Double, _ rand: inout FuzzerPRNG) -> Bool {
         switch mutator {
         case .appendRandom:
             input.unicodeScalars.append(randomScalar(&rand))
             return true
         case .insert:
             guard let idx = input.unicodeScalars.indices.randomElement(using: &rand) else {
-                return false
+                return mutate(&input, with: .appendRandom, spareComplexity: spareComplexity, &rand)
             }
             input.unicodeScalars.insert(randomScalar(&rand), at: idx)
             return true

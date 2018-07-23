@@ -72,10 +72,11 @@ public protocol FuzzerInputGenerator: FuzzerInputProperties {
      - replace a substring by a keyword relevant to the test function
      
      - Parameter input: the input to mutate
+     - Parameter spareComplexity: the additional complexity that can be added to the input
      - Parameter rand: a random number generator
      - Returns: true iff the input was actually mutated
      */
-    func mutate(_ input: inout Input, _ rand: inout FuzzerPRNG) -> Bool
+    func mutate(_ input: inout Input, _ spareComplexity: Double, _ rand: inout FuzzerPRNG) -> Bool
 }
 
 extension FuzzerInputGenerator {
@@ -106,7 +107,7 @@ public protocol FuzzerInputMutatorGroup {
      - Parameter rand: a random number generator
      - Returns: true iff the input was actually mutated
      */
-    func mutate(_ input: inout Input, with mutator: Mutator, _ rand: inout FuzzerPRNG) -> Bool
+    func mutate(_ input: inout Input, with mutator: Mutator, spareComplexity: Double,  _ rand: inout FuzzerPRNG) -> Bool
     
     /**
      A list of mutators and their associated weight.
@@ -129,10 +130,10 @@ extension FuzzerInputMutatorGroup {
      - Parameter rand: a random number generator
      - Returns: true iff the input was actually mutated
      */
-    public func mutate(_ input: inout Input, _ rand: inout FuzzerPRNG) -> Bool {
+    public func mutate(_ input: inout Input, _ spareComplexity: Double, _ rand: inout FuzzerPRNG) -> Bool {
         for _ in 0 ..< weightedMutators.count {
             let mutator = rand.weightedRandomElement(from: weightedMutators, minimum: 0)
-            if mutate(&input, with: mutator, &rand) { return true }
+            if mutate(&input, with: mutator, spareComplexity: spareComplexity, &rand) { return true }
         }
         return false
     }

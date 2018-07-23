@@ -11,7 +11,7 @@ public struct IntegerFuzzerInputMutators <T: FixedWidthInteger & RandomInitializ
     let maxNudge: UInt
     let specialValues: [T]
     
-    public func mutate(_ input: inout Input, with mutator: Mutator, _ rand: inout FuzzerPRNG) -> Bool {
+    public func mutate(_ input: inout Input, with mutator: Mutator, spareComplexity: Double, _ rand: inout FuzzerPRNG) -> Bool {
         switch mutator {
         case .nudge:
             return nudge(&input, &rand)
@@ -65,8 +65,8 @@ public struct IntegerFuzzerGenerator <T: FixedWidthInteger & RandomInitializable
         return T.random(using: &rand)
     }
     
-    public func mutate(_ x: inout T, _ r: inout FuzzerPRNG) -> Bool {
-        return mutators.mutate(&x, &r)
+    public func mutate(_ x: inout T, _ spareComplexity: Double, _ r: inout FuzzerPRNG) -> Bool {
+        return mutators.mutate(&x, spareComplexity, &r)
     }
 
     public static func complexity(of: T) -> Double {

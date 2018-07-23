@@ -3,6 +3,16 @@
 //  FuzzCheck
 //
 
+extension Double {
+    static func randomRatioBiasedToZero <R: RandomNumberGenerator> (bias: UInt8, using r: inout R) -> Double {
+        var result: Double = 1.0
+        for _ in 0 ..< bias {
+            result *= Double.random(in: 0 ..< 1.0, using: &r)
+        }
+        return result
+    }
+}
+
 public struct ArrayFuzzerGenerator <G: FuzzerInputGenerator> : FuzzerInputGenerator {
     public typealias Input = [G.Input]
     
@@ -12,15 +22,22 @@ public struct ArrayFuzzerGenerator <G: FuzzerInputGenerator> : FuzzerInputGenera
     public let baseInput: Input = []
     
     public func newInput(maxComplexity: Double, _ rand: inout FuzzerPRNG) -> Input {
-        
-        let targetComplexity = Double.random(in: 1 ..< maxComplexity, using: &rand)
+        let targetComplexity = Double.random(in: 0 ..< maxComplexity, using: &rand)
         var a: Input = []
+        var currentComplexity = ArrayFuzzerGenerator.complexity(of: a)
         while true {
-            _ = mutate(&a, &rand)
-            if ArrayFuzzerGenerator.complexity(of: a) >= targetComplexity {
-                _ = mutators.removeRandom(&a, &rand)
-                return a
+            _ = mutators.mutate(&a, with: .appendNew, spareComplexity: targetComplexity - currentComplexity, &rand)
+            currentComplexity = ArrayFuzzerGenerator.complexity(of: a)
+            
+            while currentComplexity >= targetComplexity {
+                _ = mutators.mutate(&a, with: .removeRandom, spareComplexity: 0, &rand)
+                currentComplexity = ArrayFuzzerGenerator.complexity(of: a)
+                if currentComplexity <= targetComplexity {
+                    a.shuffle()
+                    return a
+                }
             }
+            
         }
     }
     
@@ -28,15 +45,15 @@ public struct ArrayFuzzerGenerator <G: FuzzerInputGenerator> : FuzzerInputGenera
         self.elementGenerator = elementGenerator
                 
         self.mutators = ArrayMutators.init(
-            initializeElement: { [elementGenerator] r in
-                elementGenerator.newInput(maxComplexity: 0.0 /* FIXME */, &r)
+            initializeElement: { [elementGenerator] c, r in
+                elementGenerator.newInput(maxComplexity: c, &r)
             },
             mutateElement: elementGenerator.mutate
         )
     }
     
-    public func mutate(_ input: inout Input, _ rand: inout FuzzerPRNG) -> Bool {
-        return mutators.mutate(&input, &rand)
+    public func mutate(_ input: inout Input, _ spareComplexity: Double, _ rand: inout FuzzerPRNG) -> Bool {
+        return mutators.mutate(&input, spareComplexity, &rand)
     }
     
     public typealias CodableInput = [G.CodableInput]
@@ -61,10 +78,10 @@ public struct ArrayMutators <Element> : FuzzerInputMutatorGroup {
     
     public typealias Input = Array<Element>
     
-    public let initializeElement: (inout FuzzerPRNG) -> Element
-    public let mutateElement: (inout Element, inout FuzzerPRNG) -> Bool
+    public let initializeElement: (Double, inout FuzzerPRNG) -> Element
+    public let mutateElement: (inout Element, Double, inout FuzzerPRNG) -> Bool
     
-    public init(initializeElement: @escaping (inout FuzzerPRNG) -> Element, mutateElement: @escaping (inout Element, inout FuzzerPRNG) -> Bool) {
+    public init(initializeElement: @escaping (Double, inout FuzzerPRNG) -> Element, mutateElement: @escaping (inout Element, Double, inout FuzzerPRNG) -> Bool) {
         self.initializeElement = initializeElement
         self.mutateElement = mutateElement
     }
@@ -95,85 +112,52 @@ public struct ArrayMutators <Element> : FuzzerInputMutatorGroup {
         // one set of tradeoffs for all possible situations
     }
     
-    public func mutate(_ input: inout Array<Element>, with mutator: Mutator, _ rand: inout FuzzerPRNG) -> Bool {
+    public func mutate(_ input: inout Array<Element>, with mutator: Mutator, spareComplexity: Double, _ rand: inout FuzzerPRNG) -> Bool {
+        
         switch mutator {
         case .appendNew:
-            return appendNew(&input, &rand)
+            let additionalComplexity = (Double.randomRatioBiasedToZero(bias: 4, using: &rand) * spareComplexity).rounded(.up)
+            input.append(initializeElement(additionalComplexity, &rand))
+            return true
         case .appendRecycled:
-            return appendRecycled(&input, &rand)
+            guard !input.isEmpty else { return false }
+            let y = input.randomElement(using: &rand)!
+            input.append(y)
+            return true
         case .insertNew:
-            return insertNew(&input, &rand)
+            guard !input.isEmpty else {
+                return mutate(&input, with: .appendNew, spareComplexity: spareComplexity, &rand)
+            }
+            let additionalComplexity = (Double.randomRatioBiasedToZero(bias: 4, using: &rand) * spareComplexity).rounded(.up)
+            let i = input.indices.randomElement(using: &rand)!
+            input.insert(initializeElement(additionalComplexity, &rand), at: i)
+            return true
         case .insertRecycled:
-            return insertRecycled(&input, &rand)
+            guard !input.isEmpty else { return false }
+            let y = input.randomElement(using: &rand)!
+            let i = input.indices.randomElement(using: &rand)!
+            input.insert(y, at: i)
+            return true
         case .mutateElement:
-            return mutateElement(&input, &rand)
+            guard !input.isEmpty else { return false }
+            let i = input.indices.randomElement(using: &rand)!
+            return mutateElement(&input[i], spareComplexity, &rand)
         case .swap:
-            return swap(&input, &rand)
+            guard input.count > 1 else { return false }
+            let (i, j) = (input.indices.randomElement(using: &rand)!, input.indices.randomElement(using: &rand)!)
+            input.swapAt(i, j)
+            return i != j
         case .removeLast:
-            return removeLast(&input, &rand)
+            guard !input.isEmpty else { return false }
+            input.removeLast()
+            return true
         case .removeRandom:
-            return removeRandom(&input, &rand)
+            guard !input.isEmpty else { return false }
+            input.remove(at: input.indices.randomElement(using: &rand)!)
+            return true
         }
     }
-    
-    func appendNew(_ x: inout Input, _ r: inout FuzzerPRNG) -> Bool {
-        x.append(initializeElement(&r))
-        return true
-    }
-    
-    func appendRecycled(_ x: inout Input, _ r: inout FuzzerPRNG) -> Bool {
-        guard !x.isEmpty else { return false }
-        let y = x.randomElement(using: &r)!
-        x.append(y)
-        return true
-    }
-    
-    func insertNew(_ x: inout Input, _ r: inout FuzzerPRNG) -> Bool {
-        guard !x.isEmpty else { return false }
-        let i = x.indices.randomElement(using: &r)!
-        x.insert(initializeElement(&r), at: i)
-        return true
-    }
-    
-    func insertRecycled(_ x: inout Input, _ r: inout FuzzerPRNG) -> Bool {
-        guard !x.isEmpty else { return false }
-        let y = x.randomElement(using: &r)!
-        let i = x.indices.randomElement(using: &r)!
-        x.insert(y, at: i)
-        return true
-    }
-    
-    func removeLast(_ x: inout Input, _ r: inout FuzzerPRNG) -> Bool {
-        guard !x.isEmpty else { return false }
-        x.removeLast()
-        return true
-    }
-    
-    func removeFirst(_ x: inout Input, _ r: inout FuzzerPRNG) -> Bool {
-        guard !x.isEmpty else { return false }
-        x.removeFirst()
-        return true
-    }
-    
-    func removeRandom(_ x: inout Input, _ r: inout FuzzerPRNG) -> Bool {
-        guard !x.isEmpty else { return false }
-        x.remove(at: x.indices.randomElement(using: &r)!)
-        return true
-    }
-    
-    func swap(_ x: inout Input, _ r: inout FuzzerPRNG) -> Bool {
-        guard x.count > 1 else { return false }
-        let (i, j) = (x.indices.randomElement(using: &r)!, x.indices.randomElement(using: &r)!)
-        x.swapAt(i, j)
-        return i != j
-    }
-    
-    func mutateElement(_ x: inout Input, _ r: inout FuzzerPRNG) -> Bool {
-        guard !x.isEmpty else { return false }
-        let i = x.indices.randomElement(using: &r)!
-        return mutateElement(&x[i], &r)
-    }
-    
+
     public let weightedMutators: [(Mutator, UInt)] = [
         // TODO: this is completely arbitrary
         // I should find a better way to determine the

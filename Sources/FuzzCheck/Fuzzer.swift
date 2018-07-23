@@ -255,10 +255,18 @@ extension Fuzzer {
     func processNextInputs() throws {
         let idx = state.pool.randomIndex(&state.world.rand)
         state.input = state.pool[idx].input
+        var complexity: Double = state.pool[idx].complexity
         for _ in 0 ..< state.settings.mutateDepth {
-            guard state.stats.totalNumberOfRuns < state.settings.maxNumberOfRuns else { break }
-            guard generator.mutate(&state.input, &state.world.rand) else { break  }
-            guard Generator.complexity(of: state.input) < state.settings.maxInputComplexity else { continue }
+            guard
+                state.stats.totalNumberOfRuns < state.settings.maxNumberOfRuns,
+                generator.mutate(&state.input, state.settings.maxInputComplexity - complexity, &state.world.rand)
+            else {
+                break
+            }
+            complexity = Generator.complexity(of: state.input)
+            guard complexity < state.settings.maxInputComplexity else {
+                continue
+            }
             try processCurrentInput()
         }
     }

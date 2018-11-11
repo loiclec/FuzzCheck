@@ -255,7 +255,7 @@ extension Fuzzer {
     func processNextInputs() throws {
         let idx = state.pool.randomIndex(&state.world.rand)
         state.input = state.pool[idx].input
-        var complexity: Double = state.pool[idx].complexity
+        var complexity: Double = state.pool[idx].complexity - 1.0
         for _ in 0 ..< state.settings.mutateDepth {
             guard
                 state.stats.totalNumberOfRuns < state.settings.maxNumberOfRuns,
@@ -282,7 +282,6 @@ extension Fuzzer {
         }
         // Filter the inputs that are too complex
         inputs = inputs.filter { Generator.complexity(of: $0) <= state.settings.maxInputComplexity }
-        
         for input in inputs {
             state.input = input
             try processCurrentInput()
@@ -323,7 +322,7 @@ extension Fuzzer {
         state.pool.favoredInput = favoredInput
         let effect = state.pool.updateScores()
         try effect(&state.world)
-        state.settings.maxInputComplexity = favoredInput.complexity.nextDown
+        state.settings.maxInputComplexity = Generator.complexity(of: input).nextDown
         state.world.reportEvent(.didReadCorpus, stats: state.stats)
         while state.stats.totalNumberOfRuns < state.settings.maxNumberOfRuns {
             try processNextInputs()

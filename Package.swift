@@ -8,7 +8,7 @@ let package = Package(
         .executable(name: "FuzzCheckTool", targets: ["FuzzCheckTool"]),
     ],
     dependencies: [
-        .package(url: "https://github.com/apple/swift-package-manager", .revision("992c71d5dbaabb2d44a79683b9f18e05c91fd06f")),
+        .package(url: "https://github.com/apple/swift-package-manager", .revision("87523ce7e50d5fb0995682cd3c05558adbadfdfe")),
         .package(url: "https://github.com/JohnSundell/Files.git", from: Version(2, 0, 0)) 
     ],
     targets: [

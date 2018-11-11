@@ -257,7 +257,7 @@ extension FuzzerState.InputPool {
                 let simplestComplexity = smallestInputComplexityForFeature[f]!
                 let ratio = complexityRatio(simplest: simplestComplexity, other: input.complexity)
                 precondition(ratio <= 1)
-                if ratio == 1 { inputs[idx].flaggedForDeletion = false }
+                if simplestComplexity == input.complexity { inputs[idx].flaggedForDeletion = false }
             }
             guard inputs[idx].flaggedForDeletion == false else {
                 continue

@@ -22,6 +22,7 @@ public struct ArrayFuzzerGenerator <G: FuzzerInputGenerator> : FuzzerInputGenera
     public let baseInput: Input = []
     
     public func newInput(maxComplexity: Double, _ rand: inout FuzzerPRNG) -> Input {
+        guard maxComplexity > 0 else { return [] }
         let targetComplexity = Double.random(in: 0 ..< maxComplexity, using: &rand)
         var a: Input = []
         var currentComplexity = ArrayFuzzerGenerator.complexity(of: a)
@@ -41,10 +42,10 @@ public struct ArrayFuzzerGenerator <G: FuzzerInputGenerator> : FuzzerInputGenera
         }
     }
     
-    public init(maxComplexity: Double, _ elementGenerator: G) {
+    public init(_ elementGenerator: G) {
         self.elementGenerator = elementGenerator
                 
-        self.mutators = ArrayMutators.init(
+        self.mutators = ArrayMutators(
             initializeElement: { [elementGenerator] c, r in
                 elementGenerator.newInput(maxComplexity: c, &r)
             },

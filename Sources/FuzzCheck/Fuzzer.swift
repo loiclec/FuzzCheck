@@ -62,6 +62,8 @@ public final class FuzzerState <Input, Properties, World, Sensor>
         stats.executionsPerSecond = Int((Double(stats.totalNumberOfRuns) / seconds).rounded())
         stats.poolSize = pool.inputs.count
         stats.score = pool.score.rounded()
+        let avgCplx = pool.inputs.reduce(0, { $0 + $1.complexity }) / Double(pool.inputs.count)
+        stats.averageComplexity = avgCplx
         stats.rss = Int(world.getPeakMemoryUsage())
     }
     
@@ -236,7 +238,6 @@ extension Fuzzer {
      */
     func processCurrentInput() throws {
         try testCurrentInput()
-        
         let result = analyze()
         guard let newPoolElement = result else {
             return

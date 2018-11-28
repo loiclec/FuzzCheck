@@ -21,7 +21,7 @@ extension CodeCoverageSensor.Feature {
         case .edge(_):
             return 1
         case .comparison(_):
-            return 1
+            return 0.5
         }
     }
 }

@@ -44,10 +44,10 @@ public protocol FuzzerWorld {
 
 public struct FuzzerStats {
     public var totalNumberOfRuns: Int = 0
-    public var score: Double = 0
+    public var score: Int = 0
     public var poolSize: Int = 0
     public var executionsPerSecond: Int = 0
-    public var averageComplexity: Double = 0
+    public var averageComplexity: Int = 0
     public var rss: Int = 0
 }
 
@@ -192,7 +192,8 @@ public struct CommandLineFuzzerWorld <Input, Properties> : FuzzerWorld
         print("corp: \(stats.poolSize)", terminator: "\t")
         print("exec/s: \(stats.executionsPerSecond)", terminator: "\t")
         print("cplx: \(stats.averageComplexity)", terminator: "\t")
-        print("rss: \(stats.rss)")
+        //print("rss: \(stats.rss)")
+        print()
     }
 }
 

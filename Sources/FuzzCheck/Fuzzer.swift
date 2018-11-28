@@ -29,8 +29,15 @@ public final class FuzzerState <Input, Properties, World, Sensor>
 {
     /// A collection of previously-tested inputs that are considered interesting
     let pool: InputPool = InputPool()
-    /// The current input that is being tested
-    var input: Input
+    
+    var poolThreshold: Int = 64
+    
+    /// The current inputs that are being tested
+    var inputs: [Input]
+    
+    /// The index of the input being tested
+    var inputIndex: Int
+    
     /// Various statistics about the current fuzzer run.
     var stats: FuzzerStats
     /// The initial settings passed to the fuzzer
@@ -47,8 +54,9 @@ public final class FuzzerState <Input, Properties, World, Sensor>
      */
     var world: World
 
-    init(input: Input, settings: FuzzerSettings, world: World, sensor: Sensor) {
-        self.input = input
+    init(inputs: [Input], inputIndex: Int, settings: FuzzerSettings, world: World, sensor: Sensor) {
+        self.inputs = inputs
+        self.inputIndex = inputIndex
         self.stats = FuzzerStats()
         self.settings = settings
         self.world = world
@@ -61,10 +69,10 @@ public final class FuzzerState <Input, Properties, World, Sensor>
         let seconds = Double(now - processStartTime) / 1_000_000
         stats.executionsPerSecond = Int((Double(stats.totalNumberOfRuns) / seconds).rounded())
         stats.poolSize = pool.inputs.count
-        stats.score = pool.score.rounded()
-        let avgCplx = pool.inputs.reduce(0, { $0 + $1.complexity }) / Double(pool.inputs.count)
-        stats.averageComplexity = avgCplx
-        stats.rss = Int(world.getPeakMemoryUsage())
+        stats.score = Int((pool.score * 10).rounded())
+        let avgCplx = pool.smallestInputComplexityForFeature.values.reduce(0, +) / Double(pool.smallestInputComplexityForFeature.count)
+        stats.averageComplexity = Int((avgCplx * 100).rounded())
+        //stats.rss = Int(world.getPeakMemoryUsage())
     }
     
     /// Handle the signal sent to the process and exit.
@@ -74,7 +82,7 @@ public final class FuzzerState <Input, Properties, World, Sensor>
         case .illegalInstruction, .abort, .busError, .floatingPointException:
             var features: [Sensor.Feature] = []
             sensor.iterateOverCollectedFeatures { features.append($0) }
-            try! world.saveArtifact(input: input, features: features, score: pool.score, kind: .crash)
+            try! world.saveArtifact(input: inputs[inputIndex], features: features, score: pool.score, kind: .crash)
             exit(FuzzerTerminationStatus.crash.rawValue)
             
         case .interrupt:
@@ -120,7 +128,7 @@ final class Fuzzer <Input, Generator, World, Sensor>
     init(test: @escaping (Input) -> Bool, generator: Generator, settings: FuzzerSettings, world: World, sensor: Sensor) {
         self.generator = generator
         self.test = test
-        self.state = State(input: generator.baseInput, settings: settings, world: world, sensor: sensor)
+        self.state = State(inputs: [generator.baseInput], inputIndex: 0, settings: settings, world: world, sensor: sensor)
     
         let signals: [Signal] = [.segmentationViolation, .busError, .abort, .illegalInstruction, .floatingPointException, .interrupt, .softwareTermination, .fileSizeLimitExceeded]
         
@@ -164,32 +172,39 @@ public enum CommandLineFuzzer <Generator: FuzzerInputGenerator> {
         case .minimize:
             try fuzzer.minimizeLoop()
         case .read:
-            fuzzer.state.input = try fuzzer.state.world.readInputFile()
-            try fuzzer.testCurrentInput()
+            fuzzer.state.inputs = [try fuzzer.state.world.readInputFile()]
+            try fuzzer.testCurrentInputs()
         }
     }
 }
 
 extension Fuzzer {
+    
     /**
-     Run and record the test function for the current test input.
+     Run and record the test function for the current test inputs.
      Exit and save the artifact if the test function failed.
-    */
-    func testCurrentInput() throws {
+     */
+    func testCurrentInputs() throws {
+        for i in state.inputs {
+            try testInput(i)
+        }
+    }
+    
+    func testInput(_ input: Input) throws {
         state.sensor.resetCollectedFeatures()
-
+        
         state.sensor.isRecording = true
-        let success = test(state.input)
+        let success = test(input)
         state.sensor.isRecording = false
-
+        
         guard success else {
             state.world.reportEvent(.testFailure, stats: state.stats)
             var features: [Sensor.Feature] = []
             state.sensor.iterateOverCollectedFeatures { features.append($0) }
-            try state.world.saveArtifact(input: state.input, features: features, score: state.pool.score, kind: .testFailure)
+            try state.world.saveArtifact(input: input, features: features, score: state.pool.score, kind: .testFailure)
             exit(FuzzerTerminationStatus.testFailure.rawValue)
         }
-
+        
         state.stats.totalNumberOfRuns += 1
     }
 
@@ -205,7 +220,7 @@ extension Fuzzer {
         var bestInputForFeatures: [Sensor.Feature] = []
         var otherFeatures: [Sensor.Feature] = []
 
-        let currentInputComplexity = Generator.adjustedComplexity(of: state.input)
+        let currentInputComplexity = Generator.adjustedComplexity(of: state.inputs[state.inputIndex])
         
         state.sensor.iterateOverCollectedFeatures { feature in
             guard let oldComplexity = state.pool.smallestInputComplexityForFeature[feature] else {
@@ -226,7 +241,7 @@ extension Fuzzer {
         }
 
         return State.InputPool.Element(
-            input: state.input,
+            input: state.inputs[state.inputIndex],
             complexity: currentInputComplexity,
             features: bestInputForFeatures + otherFeatures
         )
@@ -236,13 +251,20 @@ extension Fuzzer {
      Run and record the test function for the current test input,
      analyze the recording, and update the input pool if needed.
      */
-    func processCurrentInput() throws {
-        try testCurrentInput()
-        let result = analyze()
-        guard let newPoolElement = result else {
+    func processCurrentInputs() throws {
+        var newPoolElements: [State.InputPool.Element] = []
+        for (input, i) in zip(state.inputs, state.inputs.indices) {
+            state.inputIndex = i
+            try testInput(input)
+            let result = analyze()
+            if let newPoolElement = result {
+                newPoolElements.append(newPoolElement)
+            }
+        }
+        guard !newPoolElements.isEmpty else {
             return
         }
-        let effect = state.pool.add(newPoolElement)
+        let effect = state.pool.add(newPoolElements)
         try effect(&state.world)
         
         state.updateStats()
@@ -254,22 +276,30 @@ extension Fuzzer {
      Then repeatedly mutate and process the current input, up to `mutateDepth` times.
      */
     func processNextInputs() throws {
-        let idx = state.pool.randomIndex(&state.world.rand)
-        state.input = state.pool[idx].input
-        var complexity: Double = state.pool[idx].complexity - 1.0
-        for _ in 0 ..< state.settings.mutateDepth {
-            guard
-                state.stats.totalNumberOfRuns < state.settings.maxNumberOfRuns,
-                generator.mutate(&state.input, state.settings.maxInputComplexity - complexity, &state.world.rand)
-            else {
-                break
+        state.inputs = []
+        state.inputIndex = 0
+        
+        while state.inputs.count < 50 {
+            let idx = state.pool.randomIndex(&state.world.rand)
+            var newInput = state.pool[idx].input
+        
+            var complexity: Double = state.pool[idx].complexity - 1.0
+            for _ in 0 ..< state.settings.mutateDepth {
+                guard
+                    state.stats.totalNumberOfRuns < state.settings.maxNumberOfRuns,
+                    generator.mutate(&newInput, state.settings.maxInputComplexity - complexity, &state.world.rand)
+                    else {
+                        break
+                }
+                complexity = Generator.complexity(of: newInput)
+                guard complexity < state.settings.maxInputComplexity else {
+                    continue
+                }
+                state.inputs.append(newInput)
             }
-            complexity = Generator.complexity(of: state.input)
-            guard complexity < state.settings.maxInputComplexity else {
-                continue
-            }
-            try processCurrentInput()
         }
+        
+        try processCurrentInputs()
     }
     
     /**
@@ -279,14 +309,15 @@ extension Fuzzer {
     func processInitialInputs() throws {
         var inputs = try state.world.readInputCorpus()
         if inputs.isEmpty {
+            print(state.settings.maxInputComplexity)
             inputs += generator.initialInputs(maxComplexity: state.settings.maxInputComplexity, &state.world.rand)
         }
         // Filter the inputs that are too complex
         inputs = inputs.filter { Generator.complexity(of: $0) <= state.settings.maxInputComplexity }
-        for input in inputs {
-            state.input = input
-            try processCurrentInput()
-        }
+        state.inputs = inputs
+        state.inputIndex = 0
+        try processCurrentInputs()
+        
     }
     
     /**
@@ -301,7 +332,17 @@ extension Fuzzer {
         state.world.reportEvent(.didReadCorpus, stats: state.stats)
             
         while state.stats.totalNumberOfRuns < state.settings.maxNumberOfRuns {
-            try processNextInputs()
+            if state.pool.inputs.count > state.poolThreshold {
+                print("RESETTING POOL")
+                state.inputs = state.pool.inputs.map { $0.input }
+                state.inputIndex = 0
+                state.pool.empty()
+                try processCurrentInputs()
+                state.poolThreshold = (state.pool.inputs.count * 3) / 2
+                state.pool.verify()
+            } else {
+                try processNextInputs()
+            }
         }
         state.world.reportEvent(.done, stats: state.stats)
     }

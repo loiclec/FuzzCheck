@@ -126,6 +126,27 @@ extension FuzzerState.InputPool {
 
 extension FuzzerState.InputPool {
     
+    func add(_ inputsInfo: [Element]) -> (inout World) throws -> Void {
+        for inputInfo in inputsInfo {
+            for f in inputInfo.features {
+                let complexity = smallestInputComplexityForFeature[f]
+                if complexity == nil || inputInfo.complexity < complexity! {
+                    smallestInputComplexityForFeature[f] = inputInfo.complexity
+                }
+            }
+            inputs.append(inputInfo)
+        }
+        let worldUpdate1 = updateScores()
+        cumulativeWeights = inputs.scan(0.0) { $0 + $1.score }
+        
+        return { w in
+            try worldUpdate1(&w)
+            for inputInfo in inputsInfo {
+                try w.addToOutputCorpus(inputInfo.input)
+            }
+        }
+    }
+    
     /**
      Add the input to the input pool. Update the score and weight of each input
      accordingly. This might result in other inputs being removed from the pool.
@@ -309,6 +330,27 @@ extension FuzzerState.InputPool {
         } else {
             let x = r.weightedRandomIndex(cumulativeWeights: cumulativeWeights, minimum: 0)
             return .normal(x)
+        }
+    }
+    
+    func empty() {
+        self.inputs.removeAll()
+        self.score = 0.0
+        self.cumulativeWeights.removeAll()
+        self.smallestInputComplexityForFeature.removeAll()
+    }
+    
+    func verify() {
+        for i in inputs {
+            var smallestForSomething = false
+            for f in i.features {
+                let cplx = smallestInputComplexityForFeature[f]!
+                precondition(i.complexity >= cplx)
+                if cplx == i.complexity {
+                    smallestForSomething = true
+                }
+            }
+            precondition(smallestForSomething)
         }
     }
 }

@@ -16,8 +16,10 @@ public enum FuzzerEvent {
     case done
     /// A new interesting input was discovered
     case new
-    /// The initial corpus has been process
+    /// The initial corpus has been processed
     case didReadCorpus
+    /// The pool of input has been reset and re-processed
+    case didResetPool
     /// A signal sent to the process was caught
     case caughtSignal(Signal)
     /// A test failure was found
@@ -186,6 +188,8 @@ public struct CommandLineFuzzerWorld <Input, Properties> : FuzzerWorld
             }
         case .testFailure:
             print("\n================ TEST FAILED ================")
+        case .didResetPool:
+            print("RESET POOL\t", terminator: "")
         }
         print("\(stats.totalNumberOfRuns)", terminator: "\t")
         print("score: \(stats.score)", terminator: "\t")

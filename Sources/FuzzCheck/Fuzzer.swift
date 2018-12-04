@@ -309,7 +309,6 @@ extension Fuzzer {
     func processInitialInputs() throws {
         var inputs = try state.world.readInputCorpus()
         if inputs.isEmpty {
-            print(state.settings.maxInputComplexity)
             inputs += generator.initialInputs(maxComplexity: state.settings.maxInputComplexity, &state.world.rand)
         }
         // Filter the inputs that are too complex
@@ -332,14 +331,16 @@ extension Fuzzer {
         state.world.reportEvent(.didReadCorpus, stats: state.stats)
             
         while state.stats.totalNumberOfRuns < state.settings.maxNumberOfRuns {
+            // Note: resetting the pool is not really useful,
+            // it is a feature I used for debugging purposes.
             if state.pool.inputs.count > state.poolThreshold {
-                print("RESETTING POOL")
                 state.inputs = state.pool.inputs.map { $0.input }
                 state.inputIndex = 0
                 state.pool.empty()
                 try processCurrentInputs()
                 state.poolThreshold = (state.pool.inputs.count * 3) / 2
-                state.pool.verify()
+                // state.pool.verify()
+                state.world.reportEvent(.didResetPool, stats: state.stats)
             } else {
                 try processNextInputs()
             }

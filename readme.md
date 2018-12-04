@@ -57,8 +57,8 @@ git clone https://github.com/loiclec/FuzzCheckExample.git
 cd FuzzCheckExample
 # Use the swift-build executable from the modified SwiftPM and use the fuzz-release configuration
 ../swift-package-manager/.build/x86_64-apple-macosx10.10/debug/swift-build -c fuzz-release
-# launch FuzzCheckTool with the test target as argument and the randomness seed 1
-.build/fuzz-release/FuzzCheckTool --target FuzzCheckExample --seed 1
+# launch FuzzCheckTool with the test target as argument
+.build/fuzz-release/FuzzCheckTool --target FuzzCheckExample
 ```
 After a few seconds, the process will stop:
 ```
@@ -89,7 +89,7 @@ let package = Package(
         .executable(name: "FuzzCheckExample", targets: ["FuzzCheckExample"])
     ],
     dependencies: [
-        .package(url: "https://github.com/loiclec/FuzzCheck.git", .revision("e20fad2beae3dd1eb003aa6a4813cec2006078b4"))
+        .package(url: "https://github.com/loiclec/FuzzCheck.git", .revision("b4abbf661f4d187ec88bc2811893283d4c091260"))
     ],
     targets: [
         .target(name: "FuzzCheckExample", dependencies: [
@@ -120,7 +120,7 @@ import FuzzCheck
 import GraphFuzzerInputGenerator
 import Graph
 
-func test0(_ g: Graph<UInt8>) -> Bool {
+func test(_ g: Graph<UInt8>) -> Bool {
     if
         g.count == 8,
         g.vertices[0].data == 100,
@@ -142,6 +142,7 @@ func test0(_ g: Graph<UInt8>) -> Bool {
         g.vertices[2].edges[1] == 6,
         g.vertices[3].edges.count == 1,
         g.vertices[3].edges[0] == 7,
+        g.vertices[4].edges.count == 0,
         g.vertices[5].edges.count == 0,
         g.vertices[6].edges.count == 0,
         g.vertices[7].edges.count == 0
@@ -151,13 +152,16 @@ func test0(_ g: Graph<UInt8>) -> Bool {
     return true
 }
 
-typealias UInt8Fuzzing = IntegerFuzzing<UInt8>
+let generator = 
+    GraphFuzzerInputGenerator<IntegerFuzzerGenerator<UInt8>>(
+        vertexGenerator: .init()
+    )
 
 try CommandLineFuzzer.launch(
-    test: test0, 
-    generator: GraphFuzzerInputGenerator<UInt8Fuzzing>(vertexGenerator: .init()), 
-    properties: GraphFuzzerInputProperties<UInt8Fuzzing>.self
+    test: test, 
+    generator: generator
 )
+
 ```
 
 It is a silly test that only fails when the graph data structure given as input is equal to this:
@@ -189,22 +193,22 @@ To test a function `(Input) -> Bool`, you need a `FuzzerInputGenerator` to gener
 3. a function to generate random values of `Input` (there is a default implementation of that one based on the `mutate` function)
 
 ```swift
-public protocol FuzzerInputGenerator {
+public protocol FuzzerInputGenerator: FuzzerInputProperties {
     associatedtype Input
 
     var baseInput: Input { get }
-    func initialInputs(_ rand: inout FuzzerPRNG) -> [Input]
-    func mutate(_ input: inout Input, _ rand: inout FuzzerPRNG) -> Bool
+    func initialInputs(maxComplexity: Double, _ rand: inout FuzzerPRNG) -> [Input]
+    func mutate(_ input: inout Input, _ spareComplexity: Double, _ rand: inout FuzzerPRNG) -> Bool
 }
 ```
 
-You also need a `FuzzerInputProperties` type, which gives the complexity of an input and its hash:
+`FuzzerInputGenerator` also conforms to `FuzzerInputProperties`, which gives the complexity of an input and its hash:
 ```swift
 public protocol FuzzerInputProperties {
     associatedtype Input
 
-    static func complexity(of input: Input) -> Double    
-    static func hash(of input: Input) -> Int
+    static func complexity(of input: Input) -> Double
+    static func hash(_ input: Input, into hasher: inout Hasher)
 }
 ```
 

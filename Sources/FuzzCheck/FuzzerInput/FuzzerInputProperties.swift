@@ -4,7 +4,7 @@ public protocol FuzzerInputProperties {
     associatedtype Input
     
     /// A type isomorphic to Input that is Codable. This exists here so
-    /// that non-nominal types can be FuzzerInputGenerator too
+    /// that non-nominal types can be inputs too
     associatedtype CodableInput: Codable = Input
     
     /**

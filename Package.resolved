@@ -11,11 +11,20 @@
         }
       },
       {
+        "package": "llbuild",
+        "repositoryURL": "https://github.com/apple/swift-llbuild.git",
+        "state": {
+          "branch": "master",
+          "revision": "ebeba84e562b588a231c910ff544b6957940f654",
+          "version": null
+        }
+      },
+      {
         "package": "SwiftPM",
         "repositoryURL": "https://github.com/apple/swift-package-manager",
         "state": {
           "branch": null,
-          "revision": "992c71d5dbaabb2d44a79683b9f18e05c91fd06f",
+          "revision": "87523ce7e50d5fb0995682cd3c05558adbadfdfe",
           "version": null
         }
       }

@@ -1,6 +1,8 @@
 # FuzzCheck
 
-FuzzCheck is a coverage-guided fuzzing engine for Swift packages that works with typed values instead of raw binary buffers. 
+(Note: I talked about FuzzCheck at the Functional Swift Conference [here](https://www.youtube.com/watch?v=23_qZePMQjA). The talk explains the motivation behind it better than this readme.)
+
+FuzzCheck is an experimental coverage-guided fuzzing engine for Swift packages that works with typed values instead of raw binary buffers. 
 
 The name “FuzzCheck” is a mix of “Fuzzer” and “QuickCheck”. The goal is to create a fuzzing engine that is convenient enough to use as the input generator for property-based tests.
 
